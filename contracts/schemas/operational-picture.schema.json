@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/operational-picture.schema.json",
+  "title": "Operational Picture",
+  "type": "object",
+  "required": ["generatedAt", "units"],
+  "properties": {
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "callsign", "displayName", "status", "latitude", "longitude", "batteryLevel", "linkQuality", "observedAt", "receivedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "callsign": { "type": "string" },
+          "displayName": { "type": "string" },
+          "status": { "enum": ["NORMAL", "STALE", "MISSING"] },
+          "latitude": { "type": ["number", "null"] },
+          "longitude": { "type": ["number", "null"] },
+          "batteryLevel": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+          "linkQuality": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+          "observedAt": { "type": ["string", "null"], "format": "date-time" },
+          "receivedAt": { "type": ["string", "null"], "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
