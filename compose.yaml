@@ -9,10 +9,10 @@ services:
       - "5432:5432"
     volumes:
       - sentinel-postgres:/var/lib/postgresql/data
-      # The entrypoint ignores mounted directories, so the SQL trees are
-      # mounted outside initdb.d and applied by the loader script below.
-      - ./database/migrations:/sentinel-sql/migrations:ro
-      - ./database/seed:/sentinel-sql/seed:ro
+      # The entrypoint ignores mounted directories, so the SQL tree is mounted
+      # outside initdb.d and applied by the loader script below. Mounting the
+      # whole tree also makes database/tools available inside the container.
+      - ./database:/sentinel-sql:ro
       - ./database/docker/30-apply-sql.sh:/docker-entrypoint-initdb.d/30-apply-sql.sh:ro
     healthcheck:
       # pg_isready on the socket turns green while the initdb scripts are

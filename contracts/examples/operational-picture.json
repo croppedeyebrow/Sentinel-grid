@@ -1,18 +1,199 @@
 {
-  "generatedAt": "2026-11-11T00:00:00Z",
+  "generatedAt": "2026-11-12T09:00:00Z",
+  "site": {
+    "id": "10000000-0000-0000-0000-000000000001",
+    "name": "Sentinel Test Site",
+    "center": { "latitude": 37.5665, "longitude": 126.978 },
+    "policy": {
+      "positionStaleAfterSeconds": 300,
+      "batteryStaleAfterSeconds": 600,
+      "linkStaleAfterSeconds": 600,
+      "batteryWarningPercent": 40,
+      "batteryCriticalPercent": 20,
+      "linkWarningPercent": 50,
+      "linkCriticalPercent": 20
+    }
+  },
+  "patrolAreas": [
+    {
+      "id": "20000000-0000-0000-0000-000000000001",
+      "name": "Primary Patrol Area",
+      "boundary": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [126.965, 37.558],
+            [126.991, 37.558],
+            [126.991, 37.575],
+            [126.965, 37.575],
+            [126.965, 37.558]
+          ]
+        ]
+      }
+    }
+  ],
+  "patrolRoutes": [
+    {
+      "id": "40000000-0000-0000-0000-000000000001",
+      "patrolAreaId": "20000000-0000-0000-0000-000000000001",
+      "name": "Riverside Loop",
+      "path": {
+        "type": "LineString",
+        "coordinates": [
+          [126.969, 37.56],
+          [126.976, 37.562],
+          [126.985, 37.566],
+          [126.988, 37.572],
+          [126.976, 37.5735],
+          [126.969, 37.56]
+        ]
+      }
+    }
+  ],
   "units": [
     {
-      "id": "sg-01",
+      "id": "30000000-0000-0000-0000-000000000001",
       "callsign": "SG-01",
       "displayName": "Sentinel One",
       "status": "NORMAL",
-      "latitude": 37.5665,
-      "longitude": 126.978,
-      "batteryLevel": 82,
-      "linkQuality": 94,
-      "observedAt": "2026-11-10T23:59:55Z",
-      "receivedAt": "2026-11-11T00:00:00Z"
+      "position": {
+        "value": { "latitude": 37.5665, "longitude": 126.978 },
+        "observedAt": "2026-11-12T08:59:55Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "battery": {
+        "value": 82,
+        "observedAt": "2026-11-12T08:59:55Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "link": {
+        "value": 94,
+        "observedAt": "2026-11-12T08:59:55Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      }
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000002",
+      "callsign": "SG-02",
+      "displayName": "Sentinel Two",
+      "status": "UNKNOWN",
+      "position": {
+        "value": { "latitude": 37.5685, "longitude": 126.982 },
+        "observedAt": "2026-11-12T08:40:00Z",
+        "receivedAt": "2026-11-12T08:40:00Z",
+        "freshness": "STALE"
+      },
+      "battery": {
+        "value": 61,
+        "observedAt": "2026-11-12T08:40:00Z",
+        "receivedAt": "2026-11-12T08:40:00Z",
+        "freshness": "STALE"
+      },
+      "link": {
+        "value": 72,
+        "observedAt": "2026-11-12T08:40:00Z",
+        "receivedAt": "2026-11-12T08:40:00Z",
+        "freshness": "STALE"
+      }
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000003",
+      "callsign": "SG-03",
+      "displayName": "Sentinel Three",
+      "status": "UNKNOWN",
+      "position": {
+        "value": { "latitude": 37.5645, "longitude": 126.973 },
+        "observedAt": "2026-11-12T08:59:50Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "battery": {
+        "value": null,
+        "observedAt": "2026-11-12T08:59:50Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "MISSING"
+      },
+      "link": {
+        "value": 88,
+        "observedAt": "2026-11-12T08:59:50Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      }
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000004",
+      "callsign": "SG-04",
+      "displayName": "Sentinel Four",
+      "status": "UNKNOWN",
+      "position": {
+        "value": null,
+        "observedAt": null,
+        "receivedAt": "2026-11-12T08:20:00Z",
+        "freshness": "MISSING"
+      },
+      "battery": {
+        "value": 37,
+        "observedAt": null,
+        "receivedAt": "2026-11-12T08:20:00Z",
+        "freshness": "MISSING"
+      },
+      "link": {
+        "value": 0,
+        "observedAt": null,
+        "receivedAt": "2026-11-12T08:20:00Z",
+        "freshness": "MISSING"
+      }
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000005",
+      "callsign": "SG-05",
+      "displayName": "Sentinel Five",
+      "status": "WARNING",
+      "position": {
+        "value": { "latitude": 37.57, "longitude": 126.97 },
+        "observedAt": "2026-11-12T08:59:52Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "battery": {
+        "value": 35,
+        "observedAt": "2026-11-12T08:59:52Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "link": {
+        "value": 88,
+        "observedAt": "2026-11-12T08:59:52Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      }
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000006",
+      "callsign": "SG-06",
+      "displayName": "Sentinel Six",
+      "status": "CRITICAL",
+      "position": {
+        "value": { "latitude": 37.5705, "longitude": 126.986 },
+        "observedAt": "2026-11-12T08:59:54Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "battery": {
+        "value": 14,
+        "observedAt": "2026-11-12T08:59:54Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      },
+      "link": {
+        "value": 62,
+        "observedAt": "2026-11-12T08:59:54Z",
+        "receivedAt": "2026-11-12T09:00:00Z",
+        "freshness": "FRESH"
+      }
     }
   ]
 }
-
