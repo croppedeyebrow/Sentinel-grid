@@ -1,14 +1,16 @@
 import type { PatrolArea, PatrolRoute } from '../patrol-unit/model'
-import type { Mission, MissionCheckpoint } from './model'
+import type { CheckpointState, Mission, MissionCheckpoint, NamedReference } from './model'
+import { allowedTransitions } from './uiModel'
 
 /**
- * Design-time mock for step 2 of the slice order. It exists to find the
- * screens and the domain questions before any mission API is written, and is
- * removed once the console talks to the real endpoints — the guide forbids
- * keeping a second implementation around after integration.
+ * Design-time mock for the mission screens. It follows
+ * `contracts/schemas/patrol-mission.schema.json` field for field, so swapping
+ * it for the real endpoints in step 6 is a change of data source and nothing
+ * else. The guide forbids keeping a second implementation after integration,
+ * so this file goes away then.
  *
- * The geometry matches the seeded city site so the mock screens line up with
- * the data the API will serve.
+ * Checkpoint states obey the domain rules: a running mission has no missed or
+ * undecided checkpoints, because the unit may still get there.
  */
 
 export const mockPatrolArea: PatrolArea = {
@@ -45,6 +47,9 @@ export const mockPatrolRoute: PatrolRoute = {
   },
 }
 
+const areaReference: NamedReference = { id: mockPatrolArea.id, name: mockPatrolArea.name }
+const routeReference: NamedReference = { id: mockPatrolRoute.id, name: mockPatrolRoute.name }
+
 export const mockUnits = [
   { unitId: '30000000-0000-0000-0000-000000000001', callsign: 'SG-01' },
   { unitId: '30000000-0000-0000-0000-000000000002', callsign: 'SG-02' },
@@ -52,7 +57,7 @@ export const mockUnits = [
   { unitId: '30000000-0000-0000-0000-000000000006', callsign: 'SG-06' },
 ]
 
-const checkpointPositions = [
+const checkpointPlan = [
   { name: 'CP-1 하천 진입', latitude: 37.561, longitude: 126.97 },
   { name: 'CP-2 보행교', latitude: 37.5625, longitude: 126.976 },
   { name: 'CP-3 공원 북측', latitude: 37.566, longitude: 126.985 },
@@ -61,16 +66,17 @@ const checkpointPositions = [
 ]
 
 function checkpoints(
-  states: MissionCheckpoint['state'][],
+  prefix: string,
+  states: CheckpointState[],
   creditedAt = '2026-11-21T09:12:00Z',
 ): MissionCheckpoint[] {
   return states.map((state, index) => ({
-    id: `cp-${index + 1}`,
+    id: `${prefix}-cp-${index + 1}`,
     sequence: index + 1,
-    name: checkpointPositions[index].name,
+    name: checkpointPlan[index].name,
     position: {
-      latitude: checkpointPositions[index].latitude,
-      longitude: checkpointPositions[index].longitude,
+      latitude: checkpointPlan[index].latitude,
+      longitude: checkpointPlan[index].longitude,
     },
     radiusMeters: 40,
     state,
@@ -79,7 +85,7 @@ function checkpoints(
 }
 
 export function countCoverage(list: readonly MissionCheckpoint[]): Mission['coverage'] {
-  const count = (state: MissionCheckpoint['state']) =>
+  const count = (state: CheckpointState) =>
     list.filter((checkpoint) => checkpoint.state === state).length
 
   return {
@@ -91,32 +97,40 @@ export function countCoverage(list: readonly MissionCheckpoint[]): Mission['cove
   }
 }
 
-function mission(
-  partial: Omit<Mission, 'coverage' | 'patrolAreaId' | 'patrolRouteId'>,
-): Mission {
+type MissionDraft = Omit<Mission, 'coverage' | 'allowedTransitions' | 'patrolArea'> & {
+  patrolArea?: NamedReference
+}
+
+function mission(partial: MissionDraft): Mission {
   return {
     ...partial,
-    patrolAreaId: mockPatrolArea.id,
-    patrolRouteId: mockPatrolRoute.id,
+    patrolArea: partial.patrolArea ?? areaReference,
     coverage: countCoverage(partial.checkpoints),
+    allowedTransitions: allowedTransitions(partial.status),
   }
 }
 
 export const mockMissions: Mission[] = [
   mission({
-    id: 'mission-active',
+    id: '50000000-0000-0000-0000-000000000001',
     name: '하천변 정기 순찰 (오전)',
     version: 3,
     status: 'ACTIVE',
-    windowStart: '2026-11-21T09:00:00Z',
-    windowEnd: '2026-11-21T11:00:00Z',
-    checkpoints: checkpoints(['VISITED', 'VISITED', 'UNKNOWN', 'MISSED', 'PLANNED']),
+    patrolRoute: routeReference,
+    window: { start: '2026-11-21T09:00:00Z', end: '2026-11-21T11:00:00Z' },
+    policyVersion: 1,
+    checkpoints: checkpoints('active', [
+      'VISITED',
+      'VISITED',
+      'PLANNED',
+      'PLANNED',
+      'PLANNED',
+    ]),
     assignments: [
       {
         unitId: mockUnits[0].unitId,
         callsign: 'SG-01',
-        windowStart: '2026-11-21T09:00:00Z',
-        windowEnd: '2026-11-21T11:00:00Z',
+        window: { start: '2026-11-21T09:00:00Z', end: '2026-11-21T11:00:00Z' },
       },
     ],
     abort: null,
@@ -126,13 +140,14 @@ export const mockMissions: Mission[] = [
     endedAt: null,
   }),
   mission({
-    id: 'mission-draft',
+    id: '50000000-0000-0000-0000-000000000002',
     name: '공사 구역 상황 순찰',
     version: 0,
     status: 'DRAFT',
-    windowStart: '2026-11-21T13:00:00Z',
-    windowEnd: '2026-11-21T14:00:00Z',
-    checkpoints: checkpoints(['PLANNED', 'PLANNED']),
+    patrolRoute: null,
+    window: { start: '2026-11-21T13:00:00Z', end: '2026-11-21T14:00:00Z' },
+    policyVersion: 0,
+    checkpoints: checkpoints('draft', ['PLANNED', 'PLANNED']),
     assignments: [],
     abort: null,
     createdAt: '2026-11-21T10:05:00Z',
@@ -141,22 +156,23 @@ export const mockMissions: Mission[] = [
     endedAt: null,
   }),
   mission({
-    id: 'mission-completed',
+    id: '50000000-0000-0000-0000-000000000003',
     name: '하천변 정기 순찰 (야간)',
     version: 5,
     status: 'COMPLETED',
-    windowStart: '2026-11-20T21:00:00Z',
-    windowEnd: '2026-11-20T23:00:00Z',
+    patrolRoute: routeReference,
+    window: { start: '2026-11-20T21:00:00Z', end: '2026-11-20T23:00:00Z' },
+    policyVersion: 1,
     checkpoints: checkpoints(
-      ['VISITED', 'VISITED', 'VISITED', 'UNKNOWN', 'VISITED'],
+      'completed',
+      ['VISITED', 'VISITED', 'MISSED', 'VISITED'],
       '2026-11-20T22:10:00Z',
     ),
     assignments: [
       {
         unitId: mockUnits[2].unitId,
         callsign: 'SG-05',
-        windowStart: '2026-11-20T21:00:00Z',
-        windowEnd: '2026-11-20T23:00:00Z',
+        window: { start: '2026-11-20T21:00:00Z', end: '2026-11-20T23:00:00Z' },
       },
     ],
     abort: null,
@@ -166,22 +182,22 @@ export const mockMissions: Mission[] = [
     endedAt: '2026-11-20T23:02:00Z',
   }),
   mission({
-    id: 'mission-aborted',
-    name: '외곽 점검 순찰',
+    id: '50000000-0000-0000-0000-000000000004',
+    name: '외곽 점검 순찰 (통신 단절)',
     version: 4,
     status: 'ABORTED',
-    windowStart: '2026-11-20T15:00:00Z',
-    windowEnd: '2026-11-20T17:00:00Z',
-    checkpoints: checkpoints(['VISITED', 'MISSED', 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']),
+    patrolRoute: null,
+    window: { start: '2026-11-20T15:00:00Z', end: '2026-11-20T17:00:00Z' },
+    policyVersion: 1,
+    checkpoints: checkpoints('aborted', ['UNKNOWN', 'UNKNOWN', 'UNKNOWN']),
     assignments: [
       {
         unitId: mockUnits[3].unitId,
         callsign: 'SG-06',
-        windowStart: '2026-11-20T15:00:00Z',
-        windowEnd: '2026-11-20T17:00:00Z',
+        window: { start: '2026-11-20T15:00:00Z', end: '2026-11-20T17:00:00Z' },
       },
     ],
-    abort: { reason: 'BATTERY', at: '2026-11-20T15:40:00Z' },
+    abort: { reason: 'LINK', at: '2026-11-20T15:40:00Z' },
     createdAt: '2026-11-20T14:30:00Z',
     approvedAt: '2026-11-20T14:50:00Z',
     startedAt: '2026-11-20T15:00:00Z',

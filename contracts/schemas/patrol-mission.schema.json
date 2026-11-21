@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/patrol-mission.schema.json",
+  "title": "Patrol Mission",
+  "description": "One patrol mission with its plan, lifecycle state and coverage judgement. Mission state (status) and checkpoint judgement (state) are separate fields: a running mission has no missed checkpoints, and a checkpoint without trustworthy evidence is undecided rather than patrolled or missed.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "status",
+    "patrolArea",
+    "patrolRoute",
+    "window",
+    "policyVersion",
+    "checkpoints",
+    "assignments",
+    "coverage",
+    "abort",
+    "allowedTransitions",
+    "createdAt",
+    "approvedAt",
+    "startedAt",
+    "endedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Revision the caller must echo back on a transition. A transition built on an older version is refused."
+    },
+    "status": { "$ref": "#/$defs/missionStatus" },
+    "patrolArea": { "$ref": "#/$defs/namedReference" },
+    "patrolRoute": {
+      "oneOf": [{ "$ref": "#/$defs/namedReference" }, { "type": "null" }],
+      "description": "Planned route drawn under the checkpoints. A mission may be planned without one."
+    },
+    "window": { "$ref": "#/$defs/window" },
+    "policyVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Site Profile revision pinned at approval, so a later policy change cannot alter a running mission's judgement."
+    },
+    "checkpoints": { "type": "array", "items": { "$ref": "#/$defs/checkpoint" } },
+    "assignments": { "type": "array", "items": { "$ref": "#/$defs/assignment" } },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "abort": { "oneOf": [{ "$ref": "#/$defs/abort" }, { "type": "null" }] },
+    "allowedTransitions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/transition" },
+      "uniqueItems": true,
+      "description": "Transitions the server will accept next. The client offers these rather than deriving its own."
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "approvedAt": { "type": ["string", "null"], "format": "date-time" },
+    "startedAt": { "type": ["string", "null"], "format": "date-time" },
+    "endedAt": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "$defs": {
+    "missionStatus": {
+      "enum": ["DRAFT", "READY", "ACTIVE", "COMPLETED", "ABORTED"],
+      "description": "DRAFT → READY → ACTIVE → COMPLETED, or ABORTED from any non-terminal state. ABORTED is a normal outcome, not an error."
+    },
+    "transition": { "enum": ["approve", "start", "complete", "abort"] },
+    "abortReason": {
+      "enum": ["OPERATOR", "BATTERY", "LINK", "SAFETY", "POLICY"],
+      "description": "Why the mission was stopped early. Recorded so the incident workflow reads a cause instead of inferring one."
+    },
+    "checkpointState": {
+      "enum": ["PLANNED", "VISITED", "MISSED", "UNKNOWN"],
+      "description": "PLANNED: not judged yet, the mission has not reached it. VISITED: a trusted observation fell inside the radius during the window. MISSED: the window was observed reliably and nothing passed. UNKNOWN: the deciding evidence is not trustworthy."
+    },
+    "namedReference": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "position": {
+      "type": "object",
+      "required": ["latitude", "longitude"],
+      "additionalProperties": false,
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "required": [
+        "id",
+        "sequence",
+        "name",
+        "position",
+        "radiusMeters",
+        "state",
+        "creditedObservedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/position" },
+        "radiusMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "state": { "$ref": "#/$defs/checkpointState" },
+        "creditedObservedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Observation time that credited the pass. Present only for VISITED, so the operator can see which observation decided it."
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "required": ["unitId", "callsign", "window"],
+      "additionalProperties": false,
+      "properties": {
+        "unitId": { "type": "string", "minLength": 1 },
+        "callsign": { "type": "string", "minLength": 1 },
+        "window": { "$ref": "#/$defs/window" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["visited", "missed", "unknown", "planned", "total"],
+      "additionalProperties": false,
+      "description": "Counts per verdict. Visited and missed do not add up to the total while checkpoints remain planned or undecided, and clients must not normalise that gap away.",
+      "properties": {
+        "visited": { "type": "integer", "minimum": 0 },
+        "missed": { "type": "integer", "minimum": 0 },
+        "unknown": { "type": "integer", "minimum": 0 },
+        "planned": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "abort": {
+      "type": "object",
+      "required": ["reason", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "reason": { "$ref": "#/$defs/abortReason" },
+        "at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "하천변 정기 순찰 (오후)",
+  "patrolAreaId": "20000000-0000-0000-0000-000000000001",
+  "patrolRouteId": "40000000-0000-0000-0000-000000000001",
+  "window": { "start": "2026-11-21T13:00:00Z", "end": "2026-11-21T15:00:00Z" },
+  "checkpoints": [
+    {
+      "name": "CP-1 하천 진입",
+      "position": { "latitude": 37.561, "longitude": 126.97 },
+      "radiusMeters": 40
+    },
+    {
+      "name": "CP-2 보행교",
+      "position": { "latitude": 37.5625, "longitude": 126.976 },
+      "radiusMeters": 40
+    }
+  ],
+  "assignments": [{ "unitId": "30000000-0000-0000-0000-000000000002" }]
+}

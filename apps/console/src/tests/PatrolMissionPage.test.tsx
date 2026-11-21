@@ -45,16 +45,20 @@ describe('PatrolMissionPage', () => {
     expect(list.getByText('진행 중')).toBeInTheDocument()
     expect(list.getByText('초안')).toBeInTheDocument()
     expect(list.getByText('중단')).toBeInTheDocument()
-    expect(list.getByText('통과 2 · 미순찰 1 · 판단 불가 1 / 5')).toBeInTheDocument()
+    // A running mission reports no misses: the unit may still get there.
+    expect(list.getByText('통과 2 · 미순찰 0 · 판단 불가 0 / 5')).toBeInTheDocument()
+    // The link was lost on the aborted mission, so nothing is called missed.
+    expect(list.getByText('통과 0 · 미순찰 0 · 판단 불가 3 / 3')).toBeInTheDocument()
   })
 
   it('reads coverage and evidence on the selected mission', () => {
     renderPage()
 
     const detail = within(screen.getByLabelText('하천변 정기 순찰 (오전)'))
-    expect(detail.getByText('통과 2 · 미순찰 1 · 판단 불가 1 / 5')).toBeInTheDocument()
-    expect(detail.getAllByText('판단 불가').length).toBeGreaterThan(0)
-    expect(detail.getAllByText('근거 관측 없음').length).toBeGreaterThan(0)
+    expect(detail.getByText('통과 2 · 미순찰 0 · 판단 불가 0 / 5')).toBeInTheDocument()
+    expect(detail.getAllByText('통과')).toHaveLength(2)
+    expect(detail.getAllByText('미실행')).toHaveLength(3)
+    expect(detail.getAllByText('근거 관측 없음')).toHaveLength(3)
   })
 
   it('places checkpoints by clicking the map while planning', () => {

@@ -6,14 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/domain"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/contracts"
 )
 
 var generatedAt = time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
@@ -235,25 +234,8 @@ func TestCORSAllowsOnlyConfiguredOrigins(t *testing.T) {
 // away from what the API actually serves.
 func contractSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
-	path := filepath.Join("..", "..", "..", "..", "..", "contracts", "schemas", "operational-picture.schema.json")
 
-	file, err := os.Open(path)
-	if err != nil {
-		t.Fatalf("open contract: %v", err)
-	}
-	defer file.Close()
-
-	document, err := jsonschema.UnmarshalJSON(file)
-	if err != nil {
-		t.Fatalf("parse contract: %v", err)
-	}
-
-	compiler := jsonschema.NewCompiler()
-	compiler.AssertFormat()
-	if err := compiler.AddResource("operational-picture.schema.json", document); err != nil {
-		t.Fatalf("add contract: %v", err)
-	}
-	schema, err := compiler.Compile("operational-picture.schema.json")
+	schema, err := contracts.Compile("operational-picture")
 	if err != nil {
 		t.Fatalf("compile contract: %v", err)
 	}
@@ -273,17 +255,11 @@ func TestResponseMatchesPublishedContract(t *testing.T) {
 }
 
 func TestCommittedExampleMatchesPublishedContract(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "..", "..", "contracts", "examples", "operational-picture.json")
-	file, err := os.Open(path)
+	instance, err := contracts.Example("operational-picture")
 	if err != nil {
-		t.Fatalf("open example: %v", err)
+		t.Fatalf("read example: %v", err)
 	}
-	defer file.Close()
 
-	instance, err := jsonschema.UnmarshalJSON(file)
-	if err != nil {
-		t.Fatalf("parse example: %v", err)
-	}
 	if err := contractSchema(t).Validate(instance); err != nil {
 		t.Fatalf("example violates the published contract: %v", err)
 	}

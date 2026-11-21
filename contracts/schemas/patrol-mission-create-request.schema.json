@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/patrol-mission-create-request.schema.json",
+  "title": "Create Patrol Mission request",
+  "description": "Creates a mission as DRAFT. Checkpoint order comes from the array order and the server assigns the sequence numbers; callsigns are resolved from the unit ids. The request must carry an Idempotency-Key header so a retry cannot create a second mission.",
+  "type": "object",
+  "required": ["name", "patrolAreaId", "window", "checkpoints"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "patrolAreaId": { "type": "string", "minLength": 1 },
+    "patrolRouteId": { "type": ["string", "null"], "minLength": 1 },
+    "window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" }
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "description": "May be empty while planning; approval then refuses the mission until at least one checkpoint exists.",
+      "items": {
+        "type": "object",
+        "required": ["name", "position", "radiusMeters"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "position": {
+            "type": "object",
+            "required": ["latitude", "longitude"],
+            "additionalProperties": false,
+            "properties": {
+              "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+              "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+            }
+          },
+          "radiusMeters": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000 }
+        }
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["unitId"],
+        "additionalProperties": false,
+        "properties": { "unitId": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

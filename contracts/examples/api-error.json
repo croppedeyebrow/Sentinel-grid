@@ -1,0 +1,5 @@
+{
+  "code": "ASSIGNMENT_CONFLICT",
+  "error": "SG-01은 겹치는 시간대에 이미 다른 임무에 배정돼 있습니다.",
+  "details": { "callsigns": ["SG-01"] }
+}

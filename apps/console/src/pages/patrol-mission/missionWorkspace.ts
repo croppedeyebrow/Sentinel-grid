@@ -1,20 +1,28 @@
 import type { PatrolArea, Position } from '../../entities/patrol-unit/model'
-import type { AbortReason, Mission, MissionCheckpoint } from '../../entities/mission/model'
-import { countCoverage, mockMissions, mockUnits } from '../../entities/mission/mockMissions'
+import type {
+  AbortReason,
+  Mission,
+  MissionCheckpoint,
+  MissionTransition,
+} from '../../entities/mission/model'
+import {
+  countCoverage,
+  mockMissions,
+  mockPatrolArea,
+  mockUnits,
+} from '../../entities/mission/mockMissions'
 import {
   allowedTransitions,
   checkApprovalReadiness,
   conflictingUnits,
-  type MissionTransition,
 } from '../../entities/mission/uiModel'
 
 /**
  * Local workspace state for the mock mission screens.
  *
  * The transitions here stand in for the Go aggregate while the UI draft is
- * being explored. Rejections are modelled too, because the point of the draft
- * is to find out which refusals the operator has to understand — those become
- * the domain tests in step 3.
+ * being explored, and they produce the same refusals the domain enforces:
+ * those refusals are what the operator has to understand.
  */
 
 export interface PlannerDraft {
@@ -64,9 +72,14 @@ export function emptyPlanner(now: Date): PlannerDraft {
   }
 }
 
+/** Keeps the server-provided field in step with the state the mock just set. */
+function withTransitions(mission: Omit<Mission, 'allowedTransitions'>): Mission {
+  return { ...mission, allowedTransitions: allowedTransitions(mission.status) }
+}
+
 function draftToMission(draft: PlannerDraft, now: Date, sequence: number): Mission {
   const checkpoints: MissionCheckpoint[] = draft.checkpoints.map((checkpoint, index) => ({
-    id: `cp-new-${index + 1}`,
+    id: `cp-new-${sequence}-${index + 1}`,
     sequence: index + 1,
     name: checkpoint.name,
     position: checkpoint.position,
@@ -74,22 +87,22 @@ function draftToMission(draft: PlannerDraft, now: Date, sequence: number): Missi
     state: 'PLANNED',
     creditedObservedAt: null,
   }))
+  const window = { start: draft.windowStart, end: draft.windowEnd }
 
-  return {
+  return withTransitions({
     id: `mission-new-${sequence}`,
     name: draft.name.trim() === '' ? '이름 없는 임무' : draft.name.trim(),
     version: 0,
     status: 'DRAFT',
-    patrolAreaId: mockMissions[0].patrolAreaId,
-    patrolRouteId: mockMissions[0].patrolRouteId,
-    windowStart: draft.windowStart,
-    windowEnd: draft.windowEnd,
+    patrolArea: { id: mockPatrolArea.id, name: mockPatrolArea.name },
+    patrolRoute: null,
+    window,
+    policyVersion: 0,
     checkpoints,
     assignments: draft.assignedCallsigns.map((callsign) => ({
       unitId: mockUnits.find((unit) => unit.callsign === callsign)?.unitId ?? callsign,
       callsign,
-      windowStart: draft.windowStart,
-      windowEnd: draft.windowEnd,
+      window,
     })),
     coverage: countCoverage(checkpoints),
     abort: null,
@@ -97,14 +110,14 @@ function draftToMission(draft: PlannerDraft, now: Date, sequence: number): Missi
     approvedAt: null,
     startedAt: null,
     endedAt: null,
-  }
+  })
 }
 
 /**
- * On a terminal transition the undecided checkpoints become UNKNOWN rather
- * than MISSED. The mock has no observation history, and claiming a checkpoint
- * was missed without evidence would invent a failure — the server decides this
- * from observation quality.
+ * On a terminal transition the mock leaves unjudged checkpoints undecided. The
+ * server decides between missed and undecided from observation quality, which
+ * the mock has none of, and claiming a miss without evidence would invent a
+ * failure.
  */
 function closeCheckpoints(checkpoints: readonly MissionCheckpoint[]): MissionCheckpoint[] {
   return checkpoints.map((checkpoint) =>
@@ -124,7 +137,7 @@ function applyTransition(
   area: PatrolArea,
   now: Date,
 ): TransitionOutcome {
-  if (!allowedTransitions(mission.status).includes(action.transition)) {
+  if (!mission.allowedTransitions.includes(action.transition)) {
     return {
       mission,
       notice: `${mission.name}: 현재 상태에서는 요청한 전이를 할 수 없습니다.`,
@@ -146,7 +159,12 @@ function applyTransition(
       }
     }
     return {
-      mission: { ...next, status: 'READY', approvedAt: now.toISOString() },
+      mission: withTransitions({
+        ...next,
+        status: 'READY',
+        approvedAt: now.toISOString(),
+        policyVersion: mission.policyVersion + 1,
+      }),
       notice: `${mission.name}을 승인했습니다. 구역·경로·체크포인트·정책이 이 임무 버전에 고정됩니다.`,
     }
   }
@@ -160,7 +178,7 @@ function applyTransition(
       }
     }
     return {
-      mission: { ...next, status: 'ACTIVE', startedAt: now.toISOString() },
+      mission: withTransitions({ ...next, status: 'ACTIVE', startedAt: now.toISOString() }),
       notice: null,
     }
   }
@@ -168,13 +186,13 @@ function applyTransition(
   if (action.transition === 'complete') {
     const checkpoints = closeCheckpoints(mission.checkpoints)
     return {
-      mission: {
+      mission: withTransitions({
         ...next,
         status: 'COMPLETED',
         endedAt: now.toISOString(),
         checkpoints,
         coverage: countCoverage(checkpoints),
-      },
+      }),
       notice: null,
     }
   }
@@ -184,14 +202,14 @@ function applyTransition(
   }
   const checkpoints = closeCheckpoints(mission.checkpoints)
   return {
-    mission: {
+    mission: withTransitions({
       ...next,
       status: 'ABORTED',
       endedAt: now.toISOString(),
       abort: { reason: action.reason, at: now.toISOString() },
       checkpoints,
       coverage: countCoverage(checkpoints),
-    },
+    }),
     notice: null,
   }
 }

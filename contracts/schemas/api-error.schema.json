@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/api-error.schema.json",
+  "title": "API error",
+  "description": "Every refusal carries a machine-readable code and the facts the operator needs to act on it. Refusals are part of this slice's contract, not an afterthought: the console shows the reason rather than a generic failure.",
+  "type": "object",
+  "required": ["code", "error"],
+  "additionalProperties": false,
+  "properties": {
+    "code": { "$ref": "#/$defs/errorCode" },
+    "error": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable sentence. Clients key their wording off code, never off this text."
+    },
+    "details": {
+      "type": "object",
+      "description": "Facts behind the refusal, present when the code has any.",
+      "additionalProperties": false,
+      "properties": {
+        "callsigns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Units already committed to an overlapping window (ASSIGNMENT_CONFLICT)."
+        },
+        "checkpointName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Checkpoint that lies outside the patrol area (CHECKPOINT_OUTSIDE_AREA)."
+        },
+        "expectedVersion": { "type": "integer", "minimum": 0 },
+        "currentVersion": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["DRAFT", "READY", "ACTIVE", "COMPLETED", "ABORTED"] },
+        "transition": { "enum": ["approve", "start", "complete", "abort"] }
+      }
+    }
+  },
+  "$defs": {
+    "errorCode": {
+      "enum": [
+        "INVALID_REQUEST",
+        "MISSION_NOT_FOUND",
+        "PATROL_AREA_NOT_FOUND",
+        "UNIT_NOT_FOUND",
+        "NO_CHECKPOINTS",
+        "NO_ASSIGNMENT",
+        "INVALID_WINDOW",
+        "CHECKPOINT_OUTSIDE_AREA",
+        "ASSIGNMENT_CONFLICT",
+        "TRANSITION_NOT_ALLOWED",
+        "STALE_VERSION",
+        "ABORT_REASON_REQUIRED",
+        "UNKNOWN_ABORT_REASON",
+        "NOT_DRAFT",
+        "NOT_PROVISIONED",
+        "PROJECTION_UNAVAILABLE"
+      ]
+    }
+  }
+}

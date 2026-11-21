@@ -5,7 +5,6 @@ import { abortReasonSchema } from '../../entities/mission/model'
 import { mockPatrolArea, mockPatrolRoute } from '../../entities/mission/mockMissions'
 import {
   abortReasonLabel,
-  allowedTransitions,
   checkApprovalReadiness,
   checkpointStateLabel,
   missionStatusLabel,
@@ -28,8 +27,8 @@ import {
  */
 
 function formatWindow(mission: Mission): string {
-  const start = new Date(mission.windowStart)
-  const end = new Date(mission.windowEnd)
+  const start = new Date(mission.window.start)
+  const end = new Date(mission.window.end)
   const time = (value: Date) =>
     value.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
   return `${start.toLocaleDateString('ko-KR')} ${time(start)}–${time(end)}`
@@ -62,7 +61,9 @@ function MissionDetail({
   dispatch: (action: MissionWorkspaceAction) => void
 }) {
   const [reason, setReason] = useState<AbortReason | ''>('')
-  const transitions = allowedTransitions(mission.status)
+  // The server states which transitions it will accept; the console offers
+  // exactly those rather than deriving its own list.
+  const transitions = mission.allowedTransitions
   const readiness = checkApprovalReadiness(mission, mockPatrolArea)
 
   return (

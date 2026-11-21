@@ -6,6 +6,7 @@ import type {
   Mission,
   MissionCoverage,
   MissionStatus,
+  MissionTransition,
 } from './model'
 
 export const missionStatusLabel: Record<MissionStatus, string> = {
@@ -31,8 +32,6 @@ export const abortReasonLabel: Record<AbortReason, string> = {
   POLICY: '정책 제한',
 }
 
-export type MissionTransition = 'approve' | 'start' | 'complete' | 'abort'
-
 export const transitionLabel: Record<MissionTransition, string> = {
   approve: '승인',
   start: '시작',
@@ -41,12 +40,11 @@ export const transitionLabel: Record<MissionTransition, string> = {
 }
 
 /**
- * Transitions the operator may attempt from a given state. The server remains
- * the authority; this only decides which controls are offered.
+ * Transitions legal from a state.
  *
- * An approved mission that has not started can still be called off, so
- * `READY → ABORTED` is offered alongside the transitions listed in the
- * scenario's table.
+ * The real mission resource carries `allowedTransitions`, and the screens use
+ * that server value. This table exists for the mock workspace, which has to
+ * produce the field itself while there is no API.
  */
 export function allowedTransitions(status: MissionStatus): MissionTransition[] {
   switch (status) {
@@ -100,8 +98,9 @@ export interface ApprovalReadiness {
 }
 
 /**
- * Preconditions the scenario puts on approval, evaluated locally so the
- * planner is told what is missing before sending the request.
+ * Preconditions the server puts on approval, evaluated locally so the planner
+ * is told what is missing before sending the request. The server re-checks all
+ * of them and remains the authority.
  */
 export function checkApprovalReadiness(mission: Mission, area: PatrolArea): ApprovalReadiness {
   const problems: string[] = []
@@ -121,7 +120,7 @@ export function checkApprovalReadiness(mission: Mission, area: PatrolArea): Appr
       `순찰구역 밖 체크포인트: ${outside.map((checkpoint) => checkpoint.name).join(', ')}`,
     )
   }
-  if (new Date(mission.windowEnd) <= new Date(mission.windowStart)) {
+  if (new Date(mission.window.end) <= new Date(mission.window.start)) {
     problems.push('운용 시간대의 종료 시각이 시작 시각보다 앞섭니다.')
   }
 
@@ -130,16 +129,16 @@ export function checkApprovalReadiness(mission: Mission, area: PatrolArea): Appr
 
 /** Units already committed to an overlapping window on another mission. */
 export function conflictingUnits(missions: readonly Mission[], candidate: Mission): string[] {
-  const start = new Date(candidate.windowStart).getTime()
-  const end = new Date(candidate.windowEnd).getTime()
+  const start = new Date(candidate.window.start).getTime()
+  const end = new Date(candidate.window.end).getTime()
 
   const busy = new Set<string>()
   for (const mission of missions) {
     if (mission.id === candidate.id) continue
     if (mission.status === 'COMPLETED' || mission.status === 'ABORTED') continue
 
-    const otherStart = new Date(mission.windowStart).getTime()
-    const otherEnd = new Date(mission.windowEnd).getTime()
+    const otherStart = new Date(mission.window.start).getTime()
+    const otherEnd = new Date(mission.window.end).getTime()
     if (otherStart >= end || otherEnd <= start) continue
 
     for (const assignment of mission.assignments) busy.add(assignment.callsign)

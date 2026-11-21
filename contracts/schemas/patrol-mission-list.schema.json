@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/patrol-mission-list.schema.json",
+  "title": "Patrol Mission list",
+  "description": "Missions of one site, newest plan first. Each entry is the full mission resource so the console can render the list and the selected detail from one response.",
+  "type": "object",
+  "required": ["generatedAt", "missions"],
+  "additionalProperties": false,
+  "properties": {
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Moment every coverage judgement in this response was made against."
+    },
+    "missions": {
+      "type": "array",
+      "items": { "$ref": "https://sentinel-grid.local/schemas/patrol-mission.schema.json" }
+    }
+  }
+}

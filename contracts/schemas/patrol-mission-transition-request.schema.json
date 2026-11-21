@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/patrol-mission-transition-request.schema.json",
+  "title": "Patrol Mission transition request",
+  "description": "Body for approve, start, complete and abort. The version is the revision the caller last read: a transition built on an older version is refused with STALE_VERSION instead of overwriting someone else's outcome. The abort endpoint additionally requires a reason, which the server enforces with ABORT_REASON_REQUIRED.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 0 },
+    "reason": {
+      "enum": ["OPERATOR", "BATTERY", "LINK", "SAFETY", "POLICY"],
+      "description": "Required by the abort endpoint, ignored by the others."
+    }
+  }
+}

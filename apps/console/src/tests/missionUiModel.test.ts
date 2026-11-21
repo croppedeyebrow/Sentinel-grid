@@ -42,14 +42,13 @@ describe('allowedTransitions', () => {
 })
 
 describe('conflictingUnits', () => {
-  const active = mockMissions.find((mission) => mission.id === 'mission-active')!
+  const active = mockMissions[0]
 
   it('finds a unit already committed to an overlapping window', () => {
     const candidate = {
       ...active,
       id: 'other',
-      windowStart: '2026-11-21T10:00:00Z',
-      windowEnd: '2026-11-21T12:00:00Z',
+      window: { start: '2026-11-21T10:00:00Z', end: '2026-11-21T12:00:00Z' },
     }
 
     expect(conflictingUnits(mockMissions, candidate)).toEqual(['SG-01'])
@@ -59,20 +58,15 @@ describe('conflictingUnits', () => {
     const candidate = {
       ...active,
       id: 'other',
-      windowStart: '2026-11-21T11:00:00Z',
-      windowEnd: '2026-11-21T13:00:00Z',
+      window: { start: '2026-11-21T11:00:00Z', end: '2026-11-21T13:00:00Z' },
     }
 
     expect(conflictingUnits(mockMissions, candidate)).toEqual([])
   })
 
   it('ignores missions that already ended', () => {
-    const finished = mockMissions.find((mission) => mission.id === 'mission-completed')!
-    const candidate = {
-      ...finished,
-      id: 'other',
-      status: 'DRAFT' as const,
-    }
+    const finished = mockMissions.find((mission) => mission.status === 'COMPLETED')!
+    const candidate = { ...finished, id: 'other', status: 'DRAFT' as const }
 
     expect(conflictingUnits(mockMissions, candidate)).toEqual([])
   })
