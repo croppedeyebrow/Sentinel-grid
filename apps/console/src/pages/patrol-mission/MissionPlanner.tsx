@@ -1,23 +1,57 @@
-import { mockUnits } from '../../entities/mission/mockMissions'
+import type { PatrolArea, Position } from '../../entities/patrol-unit/model'
 import { isInsideArea } from '../../shared/geo/polygon'
-import type { PatrolArea } from '../../entities/patrol-unit/model'
-import type { MissionWorkspaceAction, PlannerDraft } from './missionWorkspace'
+
+/**
+ * Local form state for a new plan. It is UI state, not server state: nothing
+ * exists on the server until the planner saves the draft.
+ */
+export interface PlannerDraft {
+  name: string
+  windowStart: string
+  windowEnd: string
+  checkpoints: { name: string; position: Position }[]
+  assignedUnitIds: string[]
+}
+
+export function emptyPlanner(now: Date): PlannerDraft {
+  const start = new Date(now.getTime() + 30 * 60 * 1000)
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000)
+  return {
+    name: '',
+    windowStart: start.toISOString(),
+    windowEnd: end.toISOString(),
+    checkpoints: [],
+    assignedUnitIds: [],
+  }
+}
 
 interface MissionPlannerProps {
   draft: PlannerDraft
-  area: PatrolArea
-  dispatch: (action: MissionWorkspaceAction) => void
+  area: PatrolArea | null
+  units: readonly { id: string; callsign: string }[]
+  saving: boolean
+  onChange: (draft: PlannerDraft) => void
+  onSave: () => void
+  onCancel: () => void
 }
 
 function toLocalInput(iso: string): string {
-  // datetime-local wants a value without the timezone suffix.
   return iso.slice(0, 16)
 }
 
-export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
-  const outsideCount = draft.checkpoints.filter(
-    (checkpoint) => !isInsideArea(checkpoint.position, area),
-  ).length
+export function MissionPlanner({
+  draft,
+  area,
+  units,
+  saving,
+  onChange,
+  onSave,
+  onCancel,
+}: MissionPlannerProps) {
+  const outside =
+    area === null
+      ? []
+      : draft.checkpoints.filter((checkpoint) => !isInsideArea(checkpoint.position, area))
 
   return (
     <section className="planner" aria-label="임무 계획">
@@ -29,7 +63,7 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
           type="text"
           value={draft.name}
           placeholder="예: 하천변 정기 순찰 (오후)"
-          onChange={(event) => dispatch({ type: 'planning/name', name: event.target.value })}
+          onChange={(event) => onChange({ ...draft, name: event.target.value })}
         />
       </label>
 
@@ -40,11 +74,7 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
             type="datetime-local"
             value={toLocalInput(draft.windowStart)}
             onChange={(event) =>
-              dispatch({
-                type: 'planning/window',
-                windowStart: new Date(event.target.value).toISOString(),
-                windowEnd: draft.windowEnd,
-              })
+              onChange({ ...draft, windowStart: new Date(event.target.value).toISOString() })
             }
           />
         </label>
@@ -54,11 +84,7 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
             type="datetime-local"
             value={toLocalInput(draft.windowEnd)}
             onChange={(event) =>
-              dispatch({
-                type: 'planning/window',
-                windowStart: draft.windowStart,
-                windowEnd: new Date(event.target.value).toISOString(),
-              })
+              onChange({ ...draft, windowEnd: new Date(event.target.value).toISOString() })
             }
           />
         </label>
@@ -72,7 +98,7 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
       ) : (
         <ol className="planner__checkpoints">
           {draft.checkpoints.map((checkpoint, index) => {
-            const inside = isInsideArea(checkpoint.position, area)
+            const inside = area === null || isInsideArea(checkpoint.position, area)
             return (
               <li key={`${checkpoint.name}-${index}`} className={inside ? '' : 'planner__outside'}>
                 <span>
@@ -83,7 +109,12 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
                 <button
                   type="button"
                   aria-label={`${checkpoint.name} 삭제`}
-                  onClick={() => dispatch({ type: 'planning/removeCheckpoint', index })}
+                  onClick={() =>
+                    onChange({
+                      ...draft,
+                      checkpoints: draft.checkpoints.filter((_, position) => position !== index),
+                    })
+                  }
                 >
                   삭제
                 </button>
@@ -92,22 +123,27 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
           })}
         </ol>
       )}
-      {outsideCount > 0 ? (
+      {outside.length > 0 ? (
         <p className="planner__warning" role="status">
-          구역 밖 체크포인트가 {outsideCount}개 있습니다. 승인 시 서버가 거부합니다.
+          구역 밖 체크포인트가 {outside.length}개 있습니다. 승인 시 서버가 거부합니다.
         </p>
       ) : null}
 
       <h3>순찰체 배정</h3>
       <ul className="planner__units">
-        {mockUnits.map((unit) => (
-          <li key={unit.unitId}>
+        {units.map((unit) => (
+          <li key={unit.id}>
             <label>
               <input
                 type="checkbox"
-                checked={draft.assignedCallsigns.includes(unit.callsign)}
+                checked={draft.assignedUnitIds.includes(unit.id)}
                 onChange={() =>
-                  dispatch({ type: 'planning/toggleUnit', callsign: unit.callsign })
+                  onChange({
+                    ...draft,
+                    assignedUnitIds: draft.assignedUnitIds.includes(unit.id)
+                      ? draft.assignedUnitIds.filter((id) => id !== unit.id)
+                      : [...draft.assignedUnitIds, unit.id],
+                  })
                 }
               />
               {unit.callsign}
@@ -117,14 +153,10 @@ export function MissionPlanner({ draft, area, dispatch }: MissionPlannerProps) {
       </ul>
 
       <div className="planner__actions">
-        <button type="button" onClick={() => dispatch({ type: 'planning/create' })}>
-          초안 저장
+        <button type="button" onClick={onSave} disabled={saving}>
+          {saving ? '저장 중' : '초안 저장'}
         </button>
-        <button
-          type="button"
-          className="planner__cancel"
-          onClick={() => dispatch({ type: 'planning/cancel' })}
-        >
+        <button type="button" className="planner__cancel" onClick={onCancel}>
           취소
         </button>
       </div>

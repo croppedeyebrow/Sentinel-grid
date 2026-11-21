@@ -211,3 +211,8 @@ h1, h2, p { margin-top: 0; }
   .mission-map { min-height: 420px; }
   .planner__window { grid-template-columns: 1fr; }
 }
+
+.notice--refusal { border-left-color: var(--tone-critical); color: #ffd4da; }
+.checkpoint-list__remove { grid-column: 2; padding: 2px 7px; border: 1px solid #29415b; border-radius: 6px; color: #91a6ba; background: none; font-size: 0.68rem; cursor: pointer; }
+.placing-toggle { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed #4d82ff; border-radius: 9px; color: #6dc7ff; background: var(--surface-sunken); font-weight: 700; cursor: pointer; }
+.placing-toggle--on { border-style: solid; color: #07111f; background: #6dc7ff; }

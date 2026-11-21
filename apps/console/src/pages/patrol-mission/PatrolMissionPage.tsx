@@ -1,199 +1,138 @@
-import { useReducer, useState } from 'react'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import type { AbortReason, Mission } from '../../entities/mission/model'
-import { abortReasonSchema } from '../../entities/mission/model'
-import { mockPatrolArea, mockPatrolRoute } from '../../entities/mission/mockMissions'
+import type { AbortReason, Mission, MissionTransition } from '../../entities/mission/model'
+import { missionStatusLabel, readCoverage, refusalMessage } from '../../entities/mission/uiModel'
+import type { PatrolArea, Position } from '../../entities/patrol-unit/model'
+import { ApiRefusal } from '../../shared/api/apiError'
 import {
-  abortReasonLabel,
-  checkApprovalReadiness,
-  checkpointStateLabel,
-  missionStatusLabel,
-  readCoverage,
-  transitionLabel,
-} from '../../entities/mission/uiModel'
+  addCheckpoint,
+  assignUnit,
+  createMission,
+  getMissions,
+  removeCheckpoint,
+  transitionMission,
+  unassignUnit,
+} from '../../shared/api/missions'
+import { getOperationalPicture } from '../../shared/api/operationalPicture'
 import { MissionMap } from '../../widgets/mission-map/MissionMap'
-import { MissionPlanner } from './MissionPlanner'
-import {
-  initialWorkspace,
-  missionWorkspaceReducer,
-  type MissionWorkspaceAction,
-  type MissionWorkspaceState,
-} from './missionWorkspace'
+import { MissionDetail } from './MissionDetail'
+import { emptyPlanner, MissionPlanner, type PlannerDraft } from './MissionPlanner'
 
 /**
- * Mock mission screens — step 2 of the slice order. No mission API exists yet;
- * the transitions run against local state so the screens, refusals and
- * coverage readings can be reviewed before the domain is written.
+ * Patrol Mission screens, wired to the real API.
+ *
+ * Server state (missions, site geometry) lives in TanStack Query; the planner
+ * draft, the selection and the last notice are screen state. Every refusal the
+ * server returns is shown by its contract code, so the operator reads why a
+ * request was refused rather than a generic failure.
  */
 
-function formatWindow(mission: Mission): string {
-  const start = new Date(mission.window.start)
-  const end = new Date(mission.window.end)
-  const time = (value: Date) =>
-    value.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-  return `${start.toLocaleDateString('ko-KR')} ${time(start)}–${time(end)}`
+interface Notice {
+  kind: 'ok' | 'refusal'
+  text: string
 }
 
-function CoverageBar({ mission }: { mission: Mission }) {
-  const reading = readCoverage(mission.coverage)
-
-  return (
-    <div className="coverage">
-      <div className="coverage__bar" role="img" aria-label={reading.label}>
-        <span className="coverage__segment coverage__segment--visited" style={{ width: `${reading.visitedPercent}%` }} />
-        <span className="coverage__segment coverage__segment--missed" style={{ width: `${reading.missedPercent}%` }} />
-        <span className="coverage__segment coverage__segment--unknown" style={{ width: `${reading.unknownPercent}%` }} />
-      </div>
-      <p className="coverage__label">{reading.label}</p>
-      <p className="coverage__note">
-        판단 불가는 통과로도 미순찰로도 세지 않습니다. 근거 관측이 신선하지 않으면 통과를
-        인정하지 않습니다.
-      </p>
-    </div>
-  )
+interface MutationInput {
+  task: () => Promise<Mission>
+  success?: string
 }
 
-function MissionDetail({
-  mission,
-  dispatch,
-}: {
-  mission: Mission
-  dispatch: (action: MissionWorkspaceAction) => void
-}) {
-  const [reason, setReason] = useState<AbortReason | ''>('')
-  // The server states which transitions it will accept; the console offers
-  // exactly those rather than deriving its own list.
-  const transitions = mission.allowedTransitions
-  const readiness = checkApprovalReadiness(mission, mockPatrolArea)
-
-  return (
-    <section className="mission-detail" aria-label={mission.name}>
-      <header>
-        <div>
-          <p className="eyebrow">{formatWindow(mission)}</p>
-          <h2>{mission.name}</h2>
-        </div>
-        <span className={`mission-chip mission-chip--${mission.status.toLowerCase()}`}>
-          {missionStatusLabel[mission.status]}
-        </span>
-      </header>
-
-      <CoverageBar mission={mission} />
-
-      <dl className="mission-meta">
-        <div>
-          <dt>배정</dt>
-          <dd>
-            {mission.assignments.length === 0
-              ? '없음'
-              : mission.assignments.map((assignment) => assignment.callsign).join(', ')}
-          </dd>
-        </div>
-        <div>
-          <dt>버전</dt>
-          <dd>v{mission.version}</dd>
-        </div>
-        {mission.abort === null ? null : (
-          <div>
-            <dt>중단 사유</dt>
-            <dd>
-              {abortReasonLabel[mission.abort.reason]} ·{' '}
-              {new Date(mission.abort.at).toLocaleTimeString('ko-KR')}
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      <h3>체크포인트</h3>
-      <ol className="checkpoint-list">
-        {mission.checkpoints.map((checkpoint) => (
-          <li key={checkpoint.id} className={`checkpoint-list__item--${checkpoint.state.toLowerCase()}`}>
-            <span className="checkpoint-list__name">
-              {checkpoint.sequence}. {checkpoint.name}
-            </span>
-            <span className="checkpoint-list__state">{checkpointStateLabel[checkpoint.state]}</span>
-            <span className="checkpoint-list__evidence">
-              {checkpoint.creditedObservedAt === null
-                ? '근거 관측 없음'
-                : `근거 ${new Date(checkpoint.creditedObservedAt).toLocaleTimeString('ko-KR')}`}
-            </span>
-          </li>
-        ))}
-      </ol>
-
-      {mission.status === 'DRAFT' && !readiness.ready ? (
-        <ul className="mission-problems" aria-label="승인 전 확인 사항">
-          {readiness.problems.map((problem) => (
-            <li key={problem}>{problem}</li>
-          ))}
-        </ul>
-      ) : null}
-
-      {transitions.length === 0 ? (
-        <p className="mission-terminal">종료된 임무입니다. 더 이상 전이할 수 없습니다.</p>
-      ) : (
-        <div className="mission-actions">
-          {transitions
-            .filter((transition) => transition !== 'abort')
-            .map((transition) => (
-              <button
-                key={transition}
-                type="button"
-                onClick={() => dispatch({ type: 'transition', id: mission.id, transition })}
-              >
-                {transitionLabel[transition]}
-              </button>
-            ))}
-
-          {transitions.includes('abort') ? (
-            <div className="mission-abort">
-              <label>
-                중단 사유
-                <select
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value as AbortReason | '')}
-                >
-                  <option value="">선택하지 않음</option>
-                  {abortReasonSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {abortReasonLabel[option]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className="mission-abort__button"
-                onClick={() =>
-                  dispatch({
-                    type: 'transition',
-                    id: mission.id,
-                    transition: 'abort',
-                    reason: reason === '' ? undefined : reason,
-                  })
-                }
-              >
-                중단
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
-    </section>
-  )
+function describe(error: unknown): string {
+  if (error instanceof ApiRefusal) return refusalMessage(error.code, error.details)
+  return error instanceof Error ? error.message : '요청이 실패했습니다.'
 }
 
 export function PatrolMissionPage() {
-  const [state, dispatch] = useReducer(
-    (current: MissionWorkspaceState, action: MissionWorkspaceAction) =>
-      missionWorkspaceReducer(current, action, { area: mockPatrolArea, now: new Date() }),
-    initialWorkspace,
-  )
+  const picture = useQuery({ queryKey: ['operational-picture'], queryFn: getOperationalPicture })
+  const missions = useQuery({ queryKey: ['missions'], queryFn: getMissions })
+  const queryClient = useQueryClient()
 
-  const selected = state.missions.find((mission) => mission.id === state.selectedId) ?? null
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [planner, setPlanner] = useState<PlannerDraft | null>(null)
+  const [placing, setPlacing] = useState(false)
+  const [notice, setNotice] = useState<Notice | null>(null)
+
+  const action = useMutation({
+    mutationFn: (input: MutationInput) => input.task(),
+    onSuccess: async (mission, input) => {
+      setSelectedId(mission.id)
+      setNotice(input.success === undefined ? null : { kind: 'ok', text: input.success })
+      await queryClient.invalidateQueries({ queryKey: ['missions'] })
+    },
+    onError: (error) => setNotice({ kind: 'refusal', text: describe(error) }),
+  })
+
+  const run = (task: () => Promise<Mission>, success?: string) => {
+    setNotice(null)
+    action.mutate({ task, success })
+  }
+
+  if (picture.isPending || missions.isPending) {
+    return (
+      <main className="state-panel" role="status">
+        순찰 임무를 불러오는 중입니다.
+      </main>
+    )
+  }
+
+  if (picture.isError || missions.isError) {
+    const failure = picture.error ?? missions.error
+    return (
+      <main className="state-panel state-panel--error" role="alert">
+        <h1>Mission API에 연결할 수 없습니다.</h1>
+        <p>{describe(failure)}</p>
+        <button
+          type="button"
+          onClick={() => {
+            void picture.refetch()
+            void missions.refetch()
+          }}
+        >
+          다시 시도
+        </button>
+      </main>
+    )
+  }
+
+  const site = picture.data.site
+  const units = picture.data.units.map((unit) => ({ id: unit.id, callsign: unit.callsign }))
+  const selected = missions.data.find((mission) => mission.id === selectedId) ?? null
+
+  const area: PatrolArea | null =
+    picture.data.patrolAreas.find((candidate) => candidate.id === selected?.patrolArea.id) ??
+    picture.data.patrolAreas[0] ??
+    null
+  const route =
+    picture.data.patrolRoutes.find((candidate) => candidate.patrolAreaId === area?.id) ?? null
+
+  const placeCheckpoint = (position: Position) => {
+    if (planner !== null) {
+      setPlanner({
+        ...planner,
+        checkpoints: [
+          ...planner.checkpoints,
+          { name: `CP-${planner.checkpoints.length + 1}`, position },
+        ],
+      })
+      return
+    }
+    if (selected === null || !placing) return
+
+    run(
+      () =>
+        addCheckpoint(selected.id, {
+          name: `CP-${selected.checkpoints.length + 1}`,
+          position,
+          radiusMeters: 40,
+        }),
+      '체크포인트를 추가했습니다.',
+    )
+  }
+
   const mapCheckpoints =
-    state.planner !== null
-      ? state.planner.checkpoints.map((checkpoint, index) => ({
+    planner !== null
+      ? planner.checkpoints.map((checkpoint, index) => ({
           sequence: index + 1,
           name: checkpoint.name,
           position: checkpoint.position,
@@ -206,13 +145,34 @@ export function PatrolMissionPage() {
           state: checkpoint.state,
         }))
 
+  const transition = (which: MissionTransition, reason?: AbortReason) => {
+    if (selected === null) return
+    run(
+      () =>
+        transitionMission({
+          missionId: selected.id,
+          transition: which,
+          // The version the operator last saw: the server refuses a stale one
+          // instead of overwriting someone else's outcome.
+          version: selected.version,
+          reason,
+        }),
+      which === 'approve'
+        ? '승인했습니다. 구역·경로·체크포인트와 정책이 이 임무 버전에 고정됩니다.'
+        : undefined,
+    )
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">SENTINELGRID / PATROL MISSION</p>
+          <p className="eyebrow">SENTINELGRID / {site.name}</p>
           <h1>순찰 임무</h1>
-          <p className="policy">Mock 화면입니다. 임무 API 연동 전 설계 확인용입니다.</p>
+          <p className="policy">
+            임무 {missions.data.length}건
+            {missions.isFetching ? <span className="timestamp__refreshing"> · 갱신 중</span> : null}
+          </p>
         </div>
         <div className="topbar__meta">
           <Link className="nav-link" to="/">
@@ -221,9 +181,12 @@ export function PatrolMissionPage() {
         </div>
       </header>
 
-      {state.notice === null ? null : (
-        <p className="notice" role="status">
-          {state.notice}
+      {notice === null ? null : (
+        <p
+          className={`notice${notice.kind === 'refusal' ? ' notice--refusal' : ''}`}
+          role={notice.kind === 'refusal' ? 'alert' : 'status'}
+        >
+          {notice.text}
         </p>
       )}
 
@@ -232,43 +195,109 @@ export function PatrolMissionPage() {
           <button
             type="button"
             className="mission-list__new"
-            onClick={() => dispatch({ type: 'planning/start' })}
+            onClick={() => {
+              setPlanner(emptyPlanner(new Date()))
+              setSelectedId(null)
+              setPlacing(false)
+              setNotice(null)
+            }}
           >
             새 임무 계획
           </button>
-          {state.missions.map((mission) => (
-            <button
-              key={mission.id}
-              type="button"
-              className={`mission-list__item${mission.id === state.selectedId ? ' mission-list__item--selected' : ''}`}
-              onClick={() => dispatch({ type: 'select', id: mission.id })}
-            >
-              <span className="mission-list__name">{mission.name}</span>
-              <span className={`mission-chip mission-chip--${mission.status.toLowerCase()}`}>
-                {missionStatusLabel[mission.status]}
-              </span>
-              <span className="mission-list__coverage">{readCoverage(mission.coverage).label}</span>
-            </button>
-          ))}
+          {missions.data.length === 0 ? (
+            <p className="planner__empty">등록된 임무가 없습니다.</p>
+          ) : (
+            missions.data.map((mission) => (
+              <button
+                key={mission.id}
+                type="button"
+                className={`mission-list__item${mission.id === selectedId ? ' mission-list__item--selected' : ''}`}
+                onClick={() => {
+                  setSelectedId(mission.id)
+                  setPlanner(null)
+                  setPlacing(false)
+                  setNotice(null)
+                }}
+              >
+                <span className="mission-list__name">{mission.name}</span>
+                <span className={`mission-chip mission-chip--${mission.status.toLowerCase()}`}>
+                  {missionStatusLabel[mission.status]}
+                </span>
+                <span className="mission-list__coverage">{readCoverage(mission.coverage).label}</span>
+              </button>
+            ))
+          )}
         </aside>
 
-        <MissionMap
-          area={mockPatrolArea}
-          route={mockPatrolRoute}
-          checkpoints={mapCheckpoints}
-          planning={state.planner !== null}
-          onPlaceCheckpoint={(position) => dispatch({ type: 'planning/placeCheckpoint', position })}
-        />
+        {area === null ? (
+          <section className="state-panel state-panel--empty" aria-label="순찰구역 없음">
+            <h2>순찰구역이 없습니다.</h2>
+            <p>구역이 등록되면 지도에 표시됩니다.</p>
+          </section>
+        ) : (
+          <MissionMap
+            area={area}
+            route={route}
+            checkpoints={mapCheckpoints}
+            planning={planner !== null || placing}
+            onPlaceCheckpoint={placeCheckpoint}
+          />
+        )}
 
-        {state.planner !== null ? (
-          <MissionPlanner draft={state.planner} area={mockPatrolArea} dispatch={dispatch} />
+        {planner !== null ? (
+          <MissionPlanner
+            draft={planner}
+            area={area}
+            units={units}
+            saving={action.isPending}
+            onChange={setPlanner}
+            onCancel={() => setPlanner(null)}
+            onSave={() => {
+              if (area === null) return
+              run(
+                () =>
+                  createMission({
+                    name: planner.name.trim() === '' ? '이름 없는 임무' : planner.name.trim(),
+                    patrolAreaId: area.id,
+                    patrolRouteId: route?.id ?? null,
+                    window: { start: planner.windowStart, end: planner.windowEnd },
+                    checkpoints: planner.checkpoints.map((checkpoint) => ({
+                      name: checkpoint.name,
+                      position: checkpoint.position,
+                      radiusMeters: 40,
+                    })),
+                    unitIds: planner.assignedUnitIds,
+                  }),
+                '초안으로 저장했습니다. 승인 전에는 실행할 수 없습니다.',
+              )
+              setPlanner(null)
+            }}
+          />
         ) : selected === null ? (
           <section className="state-panel state-panel--empty" aria-label="임무 상세">
             <h2>선택된 임무가 없습니다.</h2>
             <p>목록에서 임무를 선택하거나 새 임무를 계획하세요.</p>
           </section>
         ) : (
-          <MissionDetail mission={selected} dispatch={dispatch} />
+          <MissionDetail
+            mission={selected}
+            area={area}
+            units={units}
+            busy={action.isPending}
+            addingCheckpoints={placing}
+            onTransition={transition}
+            onToggleUnit={(unitId, assigned) =>
+              run(
+                () =>
+                  assigned ? unassignUnit(selected.id, unitId) : assignUnit(selected.id, unitId),
+                assigned ? '배정을 해제했습니다.' : '순찰체를 배정했습니다.',
+              )
+            }
+            onRemoveCheckpoint={(checkpointId) =>
+              run(() => removeCheckpoint(selected.id, checkpointId), '체크포인트를 삭제했습니다.')
+            }
+            onToggleCheckpointPlacing={() => setPlacing((current) => !current)}
+          />
         )}
       </section>
     </main>

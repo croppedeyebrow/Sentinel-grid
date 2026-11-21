@@ -2,7 +2,9 @@ import type { PatrolArea } from '../patrol-unit/model'
 import { isInsideArea } from '../../shared/geo/polygon'
 import type {
   AbortReason,
+  ApiError,
   CheckpointState,
+  ErrorCode,
   Mission,
   MissionCoverage,
   MissionStatus,
@@ -37,27 +39,6 @@ export const transitionLabel: Record<MissionTransition, string> = {
   start: '시작',
   complete: '완료',
   abort: '중단',
-}
-
-/**
- * Transitions legal from a state.
- *
- * The real mission resource carries `allowedTransitions`, and the screens use
- * that server value. This table exists for the mock workspace, which has to
- * produce the field itself while there is no API.
- */
-export function allowedTransitions(status: MissionStatus): MissionTransition[] {
-  switch (status) {
-    case 'DRAFT':
-      return ['approve', 'abort']
-    case 'READY':
-      return ['start', 'abort']
-    case 'ACTIVE':
-      return ['complete', 'abort']
-    case 'COMPLETED':
-    case 'ABORTED':
-      return []
-  }
 }
 
 export interface CoverageReading {
@@ -98,11 +79,11 @@ export interface ApprovalReadiness {
 }
 
 /**
- * Preconditions the server puts on approval, evaluated locally so the planner
- * is told what is missing before sending the request. The server re-checks all
- * of them and remains the authority.
+ * Preconditions the server puts on approval, checked locally so the planner is
+ * told what is missing before sending the request. The server re-checks every
+ * one of them and remains the authority.
  */
-export function checkApprovalReadiness(mission: Mission, area: PatrolArea): ApprovalReadiness {
+export function checkApprovalReadiness(mission: Mission, area: PatrolArea | null): ApprovalReadiness {
   const problems: string[] = []
 
   if (mission.checkpoints.length === 0) {
@@ -111,14 +92,15 @@ export function checkApprovalReadiness(mission: Mission, area: PatrolArea): Appr
   if (mission.assignments.length === 0) {
     problems.push('배정된 순찰체가 없습니다.')
   }
-
-  const outside = mission.checkpoints.filter(
-    (checkpoint) => !isInsideArea(checkpoint.position, area),
-  )
-  if (outside.length > 0) {
-    problems.push(
-      `순찰구역 밖 체크포인트: ${outside.map((checkpoint) => checkpoint.name).join(', ')}`,
+  if (area !== null) {
+    const outside = mission.checkpoints.filter(
+      (checkpoint) => !isInsideArea(checkpoint.position, area),
     )
+    if (outside.length > 0) {
+      problems.push(
+        `순찰구역 밖 체크포인트: ${outside.map((checkpoint) => checkpoint.name).join(', ')}`,
+      )
+    }
   }
   if (new Date(mission.window.end) <= new Date(mission.window.start)) {
     problems.push('운용 시간대의 종료 시각이 시작 시각보다 앞섭니다.')
@@ -127,24 +109,48 @@ export function checkApprovalReadiness(mission: Mission, area: PatrolArea): Appr
   return { ready: problems.length === 0, problems }
 }
 
-/** Units already committed to an overlapping window on another mission. */
-export function conflictingUnits(missions: readonly Mission[], candidate: Mission): string[] {
-  const start = new Date(candidate.window.start).getTime()
-  const end = new Date(candidate.window.end).getTime()
+const refusalText: Record<ErrorCode, string> = {
+  INVALID_REQUEST: '요청 형식이 올바르지 않습니다.',
+  MISSION_NOT_FOUND: '임무를 찾을 수 없습니다. 목록을 새로 불러오세요.',
+  CHECKPOINT_NOT_FOUND: '체크포인트를 찾을 수 없습니다.',
+  PATROL_AREA_NOT_FOUND: '순찰구역을 찾을 수 없습니다.',
+  UNIT_NOT_FOUND: '순찰체를 찾을 수 없습니다.',
+  NO_CHECKPOINTS: '체크포인트가 없어 승인할 수 없습니다.',
+  NO_ASSIGNMENT: '배정된 순찰체가 없어 승인할 수 없습니다.',
+  INVALID_WINDOW: '운용 시간대가 올바르지 않습니다.',
+  CHECKPOINT_OUTSIDE_AREA: '순찰구역 밖 체크포인트가 있습니다.',
+  ASSIGNMENT_CONFLICT: '순찰체가 겹치는 시간대에 이미 배정돼 있습니다.',
+  TRANSITION_NOT_ALLOWED: '현재 상태에서는 요청한 전이를 할 수 없습니다.',
+  STALE_VERSION: '임무가 그 사이에 변경됐습니다. 최신 상태를 확인한 뒤 다시 시도하세요.',
+  ABORT_REASON_REQUIRED: '중단 사유를 선택해야 합니다.',
+  UNKNOWN_ABORT_REASON: '알 수 없는 중단 사유입니다.',
+  NOT_DRAFT: '승인된 계획은 더 이상 수정할 수 없습니다.',
+  NOT_PROVISIONED: 'Site Profile이 아직 설정되지 않았습니다.',
+  PROJECTION_UNAVAILABLE: '임무 저장소에 연결할 수 없습니다.',
+}
 
-  const busy = new Set<string>()
-  for (const mission of missions) {
-    if (mission.id === candidate.id) continue
-    if (mission.status === 'COMPLETED' || mission.status === 'ABORTED') continue
+/**
+ * Explains a refusal from its code and the facts the server attached. The
+ * server's own sentence is not shown: the contract says clients key their
+ * wording off the code.
+ */
+export function refusalMessage(
+  code: ErrorCode | 'UNKNOWN',
+  details?: ApiError['details'],
+): string {
+  const base = code === 'UNKNOWN' ? '요청이 거부됐습니다.' : refusalText[code]
 
-    const otherStart = new Date(mission.window.start).getTime()
-    const otherEnd = new Date(mission.window.end).getTime()
-    if (otherStart >= end || otherEnd <= start) continue
-
-    for (const assignment of mission.assignments) busy.add(assignment.callsign)
+  if (code === 'ASSIGNMENT_CONFLICT' && details?.callsigns?.length) {
+    return `${details.callsigns.join(', ')}가 겹치는 시간대에 이미 배정돼 있습니다.`
   }
-
-  return candidate.assignments
-    .map((assignment) => assignment.callsign)
-    .filter((callsign) => busy.has(callsign))
+  if (code === 'CHECKPOINT_OUTSIDE_AREA' && details?.checkpointName) {
+    return `순찰구역 밖 체크포인트: ${details.checkpointName}`
+  }
+  if (code === 'TRANSITION_NOT_ALLOWED' && details?.status) {
+    return `${missionStatusLabel[details.status]} 상태에서는 요청한 전이를 할 수 없습니다.`
+  }
+  if (code === 'NOT_DRAFT' && details?.status) {
+    return `${missionStatusLabel[details.status]} 상태에서는 계획을 수정할 수 없습니다.`
+  }
+  return base
 }
