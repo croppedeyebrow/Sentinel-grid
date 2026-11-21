@@ -11,9 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/adapter"
-	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/application"
+	pictureadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/adapter"
+	pictureapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/application"
+	missionadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/adapter"
+	missionapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/application"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/config"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/httpx"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/ids"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/postgres"
 )
 
@@ -44,13 +48,21 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	reader := adapter.NewPostgresReader(pool)
-	service := application.NewService(reader)
-	handler := adapter.NewHandler(service, reader, settings.AllowedOrigins, logger)
+	mux := http.NewServeMux()
+
+	pictureReader := pictureadapter.NewPostgresReader(pool)
+	pictureadapter.
+		NewHandler(pictureapp.NewService(pictureReader), pictureReader, logger).
+		Register(mux)
+
+	missionRepository := missionadapter.NewPostgresRepository(pool)
+	missionadapter.
+		NewHandler(missionapp.NewService(missionRepository, ids.NewUUID), logger).
+		Register(mux)
 
 	server := &http.Server{
 		Addr:              ":" + settings.APIPort,
-		Handler:           handler,
+		Handler:           httpx.WithCORS(mux, settings.AllowedOrigins),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

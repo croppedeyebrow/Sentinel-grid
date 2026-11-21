@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/domain"
@@ -23,28 +22,27 @@ type ReadinessProbe interface {
 	Ping(ctx context.Context) error
 }
 
-// Handler serves the Operational Picture endpoints.
+// Handler serves the Operational Picture and health endpoints.
 type Handler struct {
-	service        PictureService
-	probe          ReadinessProbe
-	allowedOrigins []string
-	logger         *slog.Logger
+	service PictureService
+	probe   ReadinessProbe
+	logger  *slog.Logger
 }
 
-// NewHandler builds the HTTP handler. allowedOrigins is the exact list of
-// browser origins permitted to read the API.
-func NewHandler(service PictureService, probe ReadinessProbe, allowedOrigins []string, logger *slog.Logger) http.Handler {
+// NewHandler builds the HTTP handler. Cross-origin rules are applied once for
+// the whole service by platform/httpx, not per adapter.
+func NewHandler(service PictureService, probe ReadinessProbe, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	handler := &Handler{service: service, probe: probe, allowedOrigins: allowedOrigins, logger: logger}
+	return &Handler{service: service, probe: probe, logger: logger}
+}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health/live", handler.live)
-	mux.HandleFunc("GET /health/ready", handler.ready)
-	mux.HandleFunc("GET /api/v1/operational-picture", handler.operationalPicture)
-
-	return handler.withCORS(mux)
+// Register mounts the endpoints on the service mux.
+func (h *Handler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /health/live", h.live)
+	mux.HandleFunc("GET /health/ready", h.ready)
+	mux.HandleFunc("GET /api/v1/operational-picture", h.operationalPicture)
 }
 
 type healthResponse struct {
@@ -84,22 +82,6 @@ func (h *Handler) operationalPicture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, newOperationalPictureDTO(picture), h.logger)
-}
-
-func (h *Handler) withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if origin := r.Header.Get("Origin"); origin != "" && slices.Contains(h.allowedOrigins, origin) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Add("Vary", "Origin")
-		}
-		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any, logger *slog.Logger) {

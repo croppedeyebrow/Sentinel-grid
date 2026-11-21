@@ -13,6 +13,7 @@ import (
 
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/domain"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/contracts"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/httpx"
 )
 
 var generatedAt = time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC)
@@ -102,8 +103,12 @@ func picture() domain.OperationalPicture {
 	}
 }
 
+// handlerFor assembles the service the way main does: endpoints on one mux,
+// with the cross-origin rules applied once around it.
 func handlerFor(service PictureService, probe ReadinessProbe) http.Handler {
-	return NewHandler(service, probe, []string{"http://localhost:5173"}, nil)
+	mux := http.NewServeMux()
+	NewHandler(service, probe, nil).Register(mux)
+	return httpx.WithCORS(mux, []string{"http://localhost:5173"})
 }
 
 func get(t *testing.T, handler http.Handler, path string) *httptest.ResponseRecorder {

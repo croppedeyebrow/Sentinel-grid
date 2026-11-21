@@ -17,6 +17,9 @@ var (
 	approvedAt  = time.Date(2026, 11, 21, 8, 50, 0, 0, time.UTC)
 )
 
+// sitePolicyVersion is the Site Profile revision approval pins to the mission.
+const sitePolicyVersion = 3
+
 func testWindow() Window { return Window{Start: windowStart, End: windowEnd} }
 
 // testArea is the seeded city patrol area.
@@ -135,7 +138,7 @@ func TestApproveRefusesAnIncompletePlan(t *testing.T) {
 			mission := draft()
 			testCase.mutate(&mission)
 
-			err := mission.Approve(testArea(), mission.Version, approvedAt)
+			err := mission.Approve(testArea(), sitePolicyVersion, mission.Version, approvedAt)
 
 			if !errors.Is(err, testCase.wantErr) {
 				t.Fatalf("err = %v, want %v", err, testCase.wantErr)
@@ -155,7 +158,7 @@ func TestApproveNamesTheOffendingCheckpoint(t *testing.T) {
 	mission.Checkpoints[1].Name = "CP-구역밖"
 	mission.Checkpoints[1].Position = Position{Latitude: 37.6, Longitude: 127.05}
 
-	err := mission.Approve(testArea(), mission.Version, approvedAt)
+	err := mission.Approve(testArea(), sitePolicyVersion, mission.Version, approvedAt)
 
 	if err == nil || !errors.Is(err, ErrCheckpointOutside) {
 		t.Fatalf("err = %v, want ErrCheckpointOutside", err)
@@ -168,7 +171,7 @@ func TestApproveNamesTheOffendingCheckpoint(t *testing.T) {
 func TestApproveFreezesThePlan(t *testing.T) {
 	mission := draft()
 
-	if err := mission.Approve(testArea(), mission.Version, approvedAt); err != nil {
+	if err := mission.Approve(testArea(), sitePolicyVersion, mission.Version, approvedAt); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -180,6 +183,11 @@ func TestApproveFreezesThePlan(t *testing.T) {
 	}
 	if mission.ApprovedAt == nil || !mission.ApprovedAt.Equal(approvedAt) {
 		t.Error("approval moment must be recorded")
+	}
+	// The plan is frozen to the policy it was approved under, so a later
+	// policy change cannot move a running mission's judgements.
+	if mission.PolicyVersion != sitePolicyVersion {
+		t.Errorf("policyVersion = %d, want the site revision %d pinned", mission.PolicyVersion, sitePolicyVersion)
 	}
 }
 
@@ -291,7 +299,7 @@ func TestTerminalMissionsAcceptNothing(t *testing.T) {
 			version := mission.Version
 
 			errs := []error{
-				mission.Approve(testArea(), version, windowEnd),
+				mission.Approve(testArea(), sitePolicyVersion, version, windowEnd),
 				mission.Start(version, windowEnd),
 				mission.Complete(version, windowEnd),
 				mission.AbortWith(AbortOperator, version, windowEnd),

@@ -103,7 +103,7 @@ type Mission struct {
 }
 
 // Errors the aggregate returns. They exist as values because the HTTP adapter
-// maps each one to its own status code and message.
+// maps each one to its own status code and error code.
 var (
 	ErrTransitionNotAllowed = errors.New("transition not allowed from this state")
 	ErrStaleVersion         = errors.New("mission was modified by someone else")
@@ -115,6 +115,53 @@ var (
 	ErrNotDraft             = errors.New("mission can only be edited while it is a draft")
 	ErrUnknownAbortReason   = errors.New("abort reason is not recognised")
 )
+
+// StaleVersionError reports which revision the caller held, so the adapter can
+// tell the operator what to re-read rather than only that it failed.
+type StaleVersionError struct {
+	Expected int
+	Current  int
+}
+
+func (e StaleVersionError) Error() string {
+	return fmt.Sprintf("mission was modified by someone else: expected version %d, have %d", e.Expected, e.Current)
+}
+
+func (e StaleVersionError) Is(target error) bool { return target == ErrStaleVersion }
+
+// TransitionNotAllowedError names the transition and the state that refused it.
+type TransitionNotAllowedError struct {
+	Transition Transition
+	Status     Status
+}
+
+func (e TransitionNotAllowedError) Error() string {
+	return fmt.Sprintf("transition not allowed from this state: %s on %s", e.Transition, e.Status)
+}
+
+func (e TransitionNotAllowedError) Is(target error) bool { return target == ErrTransitionNotAllowed }
+
+// CheckpointOutsideError names the checkpoint that lies outside the area.
+type CheckpointOutsideError struct {
+	Name string
+}
+
+func (e CheckpointOutsideError) Error() string {
+	return fmt.Sprintf("checkpoint lies outside the patrol area: %s", e.Name)
+}
+
+func (e CheckpointOutsideError) Is(target error) bool { return target == ErrCheckpointOutside }
+
+// NotDraftError names the state that refused the edit.
+type NotDraftError struct {
+	Status Status
+}
+
+func (e NotDraftError) Error() string {
+	return fmt.Sprintf("mission can only be edited while it is a draft: status %s", e.Status)
+}
+
+func (e NotDraftError) Is(target error) bool { return target == ErrNotDraft }
 
 // IsTerminal reports whether the mission has finished and accepts no further
 // transition.
@@ -156,10 +203,10 @@ func (m Mission) allows(transition Transition) bool {
 // current version, and that the transition is legal from this state.
 func (m Mission) guard(transition Transition, expectedVersion int) error {
 	if expectedVersion != m.Version {
-		return fmt.Errorf("%w: expected version %d, have %d", ErrStaleVersion, expectedVersion, m.Version)
+		return StaleVersionError{Expected: expectedVersion, Current: m.Version}
 	}
 	if !m.allows(transition) {
-		return fmt.Errorf("%w: %s on %s", ErrTransitionNotAllowed, transition, m.Status)
+		return TransitionNotAllowedError{Transition: transition, Status: m.Status}
 	}
 	return nil
 }
@@ -168,7 +215,7 @@ func (m Mission) guard(transition Transition, expectedVersion int) error {
 // mission so that approval can freeze them.
 func (m *Mission) AddCheckpoint(checkpoint Checkpoint) error {
 	if m.Status != StatusDraft {
-		return fmt.Errorf("%w: status %s", ErrNotDraft, m.Status)
+		return NotDraftError{Status: m.Status}
 	}
 	checkpoint.Sequence = len(m.Checkpoints) + 1
 	m.Checkpoints = append(m.Checkpoints, checkpoint)
@@ -179,7 +226,7 @@ func (m *Mission) AddCheckpoint(checkpoint Checkpoint) error {
 // the sequence always reflects the planned order.
 func (m *Mission) RemoveCheckpoint(id string) error {
 	if m.Status != StatusDraft {
-		return fmt.Errorf("%w: status %s", ErrNotDraft, m.Status)
+		return NotDraftError{Status: m.Status}
 	}
 
 	remaining := make([]Checkpoint, 0, len(m.Checkpoints))
@@ -198,7 +245,7 @@ func (m *Mission) RemoveCheckpoint(id string) error {
 // with other missions are checked by the application, which can see them.
 func (m *Mission) Assign(unitID, callsign string) error {
 	if m.Status != StatusDraft {
-		return fmt.Errorf("%w: status %s", ErrNotDraft, m.Status)
+		return NotDraftError{Status: m.Status}
 	}
 	for _, assignment := range m.Assignments {
 		if assignment.UnitID == unitID {
@@ -216,7 +263,7 @@ func (m *Mission) Assign(unitID, callsign string) error {
 // Unassign removes a unit from a draft mission.
 func (m *Mission) Unassign(unitID string) error {
 	if m.Status != StatusDraft {
-		return fmt.Errorf("%w: status %s", ErrNotDraft, m.Status)
+		return NotDraftError{Status: m.Status}
 	}
 
 	remaining := make([]Assignment, 0, len(m.Assignments))
@@ -232,7 +279,7 @@ func (m *Mission) Unassign(unitID string) error {
 // Approve freezes the plan. A mission without checkpoints, without an assigned
 // unit, with an unusable window, or with a checkpoint outside its area cannot
 // be approved, which is what keeps an unapprovable plan from ever starting.
-func (m *Mission) Approve(area Area, expectedVersion int, now time.Time) error {
+func (m *Mission) Approve(area Area, policyVersion, expectedVersion int, now time.Time) error {
 	if err := m.guard(TransitionApprove, expectedVersion); err != nil {
 		return err
 	}
@@ -247,11 +294,12 @@ func (m *Mission) Approve(area Area, expectedVersion int, now time.Time) error {
 	}
 	for _, checkpoint := range m.Checkpoints {
 		if !area.Contains(checkpoint.Position) {
-			return fmt.Errorf("%w: %s", ErrCheckpointOutside, checkpoint.Name)
+			return CheckpointOutsideError{Name: checkpoint.Name}
 		}
 	}
 
 	m.Status = StatusReady
+	m.PolicyVersion = policyVersion
 	m.ApprovedAt = &now
 	m.Version++
 	return nil

@@ -70,8 +70,10 @@ acting at once cannot overwrite each other's outcome.
 1. A mission cannot start without an approved area, route, checkpoints and
    policy version (`03_Go_임무API_아키텍처.md` §3).
 2. One unit cannot hold two overlapping assignments (same document).
-3. Every checkpoint must lie inside the mission's patrol area, verified
-   server-side with PostGIS containment.
+3. Every checkpoint must lie inside the mission's patrol area. The boundary is
+   read from PostGIS and the containment decision is made in the domain, so
+   approval stays decidable in a unit test; the client's own check is only
+   feedback while placing checkpoints.
 4. **Coverage counts only observations that satisfy the quality conditions**
    (invariant 6 in `10_도메인모델_요구사항.md`). This is the point where the
    previous slice feeds this one.

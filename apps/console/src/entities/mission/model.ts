@@ -116,6 +116,7 @@ export const transitionRequestSchema = z.object({
 export const errorCodeSchema = z.enum([
   'INVALID_REQUEST',
   'MISSION_NOT_FOUND',
+  'CHECKPOINT_NOT_FOUND',
   'PATROL_AREA_NOT_FOUND',
   'UNIT_NOT_FOUND',
   'NO_CHECKPOINTS',

@@ -56,6 +56,7 @@ which checkpoint lies outside the area, which version was expected.
 | --- | --- | --- |
 | `INVALID_REQUEST` | 400 | Body does not match the request schema |
 | `MISSION_NOT_FOUND` | 404 | No mission with that id |
+| `CHECKPOINT_NOT_FOUND` | 404 | No checkpoint with that id on this mission |
 | `PATROL_AREA_NOT_FOUND` | 404 | The plan references an unknown area |
 | `UNIT_NOT_FOUND` | 404 | The assignment references an unknown unit |
 | `NO_CHECKPOINTS` | 422 | Approval needs at least one checkpoint |
