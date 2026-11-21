@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import type { UnitStatus } from '../../entities/patrol-unit/model'
 import {
   countUntrustedPositions,
@@ -107,6 +108,9 @@ export function OperationalPicturePage() {
           <p className="trust-note">
             위치 미신뢰 {untrustedPositions} / {units.length}
           </p>
+          <Link className="nav-link" to="/missions">
+            순찰 임무로 이동
+          </Link>
         </div>
       </header>
 

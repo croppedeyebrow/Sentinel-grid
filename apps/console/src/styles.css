@@ -115,3 +115,99 @@ h1, h2, p { margin-top: 0; }
   .workspace { grid-template-columns: 1fr; }
   .patrol-map { min-height: 460px; }
 }
+
+/* ---- Patrol Mission (mock screens) ---- */
+
+.nav-link { display: inline-block; margin-top: 8px; color: #6dc7ff; font-size: 0.78rem; font-weight: 700; text-decoration: none; }
+.nav-link:hover { text-decoration: underline; }
+.notice { margin: 0 0 14px; padding: 11px 14px; border: 1px solid #29415b; border-left: 3px solid #6dc7ff; border-radius: 10px; background: var(--surface); color: #c3d3e4; font-size: 0.82rem; }
+
+.mission-workspace { display: grid; grid-template-columns: 300px minmax(0, 1fr) 400px; gap: 16px; align-items: start; min-height: 650px; }
+
+.mission-list { display: flex; flex-direction: column; gap: 10px; }
+.mission-list__new { padding: 11px; border: 1px dashed #29415b; border-radius: 11px; color: #6dc7ff; background: var(--surface); font-weight: 700; cursor: pointer; }
+.mission-list__item { display: grid; gap: 6px; padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: inherit; text-align: left; cursor: pointer; }
+.mission-list__item--selected { border-color: #4d82ff; box-shadow: 0 0 0 1px #4d82ff inset; }
+.mission-list__name { font-weight: 700; }
+.mission-list__coverage { color: #71889e; font-size: 0.7rem; }
+
+.mission-chip { justify-self: start; padding: 3px 8px; border: 1px solid currentColor; border-radius: 999px; font-size: 0.68rem; font-weight: 800; }
+.mission-chip--draft { color: var(--muted); }
+.mission-chip--ready { color: #6dc7ff; }
+.mission-chip--active { color: var(--tone-normal); }
+.mission-chip--completed { color: #a8bccf; }
+.mission-chip--aborted { color: var(--tone-warning); }
+
+.mission-map { position: relative; min-height: 650px; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; }
+.mission-map__canvas { position: absolute; inset: 0; background-color: #0a1728; }
+.mission-map--planning .mission-map__canvas { cursor: crosshair; }
+.mission-map__hint { position: absolute; top: 14px; left: 14px; z-index: 1; margin: 0; padding: 7px 11px; border: 1px solid #4d82ff; border-radius: 9px; background: rgba(5, 11, 19, 0.85); color: #c3d3e4; font-size: 0.74rem; }
+
+.checkpoint-marker { display: grid; width: 22px; height: 22px; padding: 0; place-content: center; border: 2px solid #07111f; border-radius: 6px; background: var(--marker-color); color: #07111f; font-size: 0.66rem; font-weight: 800; cursor: pointer; }
+.checkpoint-marker--planned { background: transparent; border-style: dashed; border-color: var(--marker-color); color: var(--marker-color); }
+.checkpoint-marker--unknown { background: transparent; border-style: dashed; border-color: var(--marker-color); color: var(--marker-color); }
+
+.mission-detail, .planner { padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.mission-detail header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.mission-detail h2, .planner h2 { margin-bottom: 14px; font-size: 1.05rem; }
+.mission-detail h3, .planner h3 { margin: 18px 0 8px; color: #91a6ba; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.coverage { margin-top: 6px; }
+.coverage__bar { display: flex; overflow: hidden; height: 10px; border-radius: 999px; background: var(--surface-sunken); }
+.coverage__segment--visited { background: var(--tone-normal); }
+.coverage__segment--missed { background: var(--tone-critical); }
+.coverage__segment--unknown { background: repeating-linear-gradient(135deg, var(--tone-unknown) 0 4px, transparent 4px 8px); }
+.coverage__label { margin: 9px 0 0; font-size: 0.82rem; font-weight: 700; }
+.coverage__note { margin: 5px 0 0; color: #71889e; font-size: 0.72rem; line-height: 1.5; }
+
+.mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0 0; }
+.mission-meta div { padding: 10px; border-radius: 9px; background: var(--surface-sunken); }
+.mission-meta dt { color: #71889e; font-size: 0.72rem; }
+.mission-meta dd { margin: 3px 0 0; font-weight: 700; font-size: 0.82rem; }
+
+.checkpoint-list { margin: 0; padding-left: 0; list-style: none; }
+.checkpoint-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 9px 11px; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0; margin-bottom: 7px; background: var(--surface-sunken); font-size: 0.8rem; }
+.checkpoint-list__item--visited { border-left-color: var(--tone-normal); }
+.checkpoint-list__item--missed { border-left-color: var(--tone-critical); }
+.checkpoint-list__item--unknown { border-left-color: var(--tone-unknown); }
+.checkpoint-list__item--planned { border-left-color: #4d82ff; }
+.checkpoint-list__state { font-weight: 800; }
+.checkpoint-list__evidence { grid-column: 1 / -1; color: #71889e; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; }
+
+.mission-problems { margin: 14px 0 0; padding: 11px 11px 11px 28px; border: 1px solid var(--tone-warning); border-radius: 10px; color: var(--tone-warning); font-size: 0.78rem; line-height: 1.6; }
+.mission-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: end; margin-top: 16px; }
+.mission-actions button { padding: 9px 15px; border: 1px solid #29415b; border-radius: 9px; color: inherit; background: var(--surface-sunken); font-weight: 700; cursor: pointer; }
+.mission-actions button:hover { border-color: #4d82ff; }
+.mission-abort { display: flex; gap: 8px; align-items: end; padding: 9px; border: 1px dashed #29415b; border-radius: 10px; }
+.mission-abort label { display: grid; gap: 4px; color: #71889e; font-size: 0.72rem; }
+.mission-abort select { padding: 7px; border: 1px solid #29415b; border-radius: 7px; color: inherit; background: #0c1827; }
+.mission-abort__button { color: var(--tone-warning) !important; }
+.mission-terminal { margin: 16px 0 0; color: #71889e; font-size: 0.78rem; }
+
+.planner__field { display: grid; gap: 5px; margin-bottom: 11px; color: #91a6ba; font-size: 0.74rem; }
+.planner__field input { padding: 8px; border: 1px solid #29415b; border-radius: 8px; color: inherit; background: #0c1827; }
+.planner__window { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.planner__count { color: #6dc7ff; }
+.planner__empty, .planner__note { color: #71889e; font-size: 0.74rem; line-height: 1.55; }
+.planner__checkpoints { margin: 0; padding-left: 20px; font-size: 0.78rem; }
+.planner__checkpoints li { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.planner__checkpoints button { padding: 3px 7px; border: 1px solid #29415b; border-radius: 6px; color: #91a6ba; background: none; font-size: 0.7rem; cursor: pointer; }
+.planner__outside { color: var(--tone-critical); }
+.planner__outside em { font-style: normal; font-weight: 800; font-size: 0.7rem; }
+.planner__warning { margin: 9px 0 0; color: var(--tone-critical); font-size: 0.74rem; }
+.planner__units { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 0.8rem; }
+.planner__units label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.planner__actions { display: flex; gap: 9px; margin: 18px 0 10px; }
+.planner__actions button { padding: 9px 15px; border: 1px solid #4d82ff; border-radius: 9px; color: #edf7ff; background: rgba(47, 109, 246, 0.18); font-weight: 700; cursor: pointer; }
+.planner__cancel { border-color: #29415b !important; background: var(--surface-sunken) !important; }
+
+@media (max-width: 1300px) {
+  .mission-workspace { grid-template-columns: 260px minmax(0, 1fr); }
+  .mission-detail, .planner { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  .mission-workspace { grid-template-columns: 1fr; }
+  .mission-map { min-height: 420px; }
+  .planner__window { grid-template-columns: 1fr; }
+}
