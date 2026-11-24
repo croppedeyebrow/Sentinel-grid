@@ -11,3 +11,13 @@ coverage/
 .idea/
 .vscode/
 
+# Rust build output. Cargo.lock is committed on purpose: the gateway is a
+# deployed service, not a library, so its dependency versions are pinned.
+target/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
