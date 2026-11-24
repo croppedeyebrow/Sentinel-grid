@@ -1,8 +1,14 @@
 # SentinelGrid
 
-SentinelGrid의 첫 번째 수직 슬라이스인 **Operational Picture**입니다.
-설정 기준 문서는 [docs/01_초기_개발환경_세팅.md](docs/01_초기_개발환경_세팅.md),
-슬라이스 범위는 [docs/개발_과정_14일/01_운영상황도_슬라이스_Day01-02.md](docs/개발_과정_14일/01_운영상황도_슬라이스_Day01-02.md)입니다.
+완료된 수직 슬라이스는 두 개입니다.
+
+| 슬라이스 | 범위 문서 | 결정 기록 |
+| --- | --- | --- |
+| Operational Picture (Day 01–02) | [01_운영상황도_슬라이스](docs/개발_과정_14일/01_운영상황도_슬라이스_Day01-02.md) | [ADR 0002](docs/adr/0002-two-axis-unit-status.md) |
+| Patrol Mission (Day 03–04) | [02_순찰임무_슬라이스](docs/개발_과정_14일/02_순찰임무_슬라이스_Day03-04.md) | [ADR 0003](docs/adr/0003-patrol-mission-lifecycle-and-coverage.md) |
+
+개발 방식은 [docs/00_도메인_수직슬라이스_개발_가이드.md](docs/00_도메인_수직슬라이스_개발_가이드.md),
+초기 환경 기준은 [docs/01_초기_개발환경_세팅.md](docs/01_초기_개발환경_세팅.md)입니다.
 
 ## 구성
 
@@ -27,6 +33,23 @@ pnpm workspace 루트는 저장소 최상위이며, `apps/*`가 워크스페이�
 위험도 단정하지 않습니다. 판정 기준(신선도 창, 배터리·링크 임계값)은 Site Profile에
 저장되고 API 응답에 함께 실립니다. 배경과 제한사항은
 [docs/adr/0002-two-axis-unit-status.md](docs/adr/0002-two-axis-unit-status.md)에 있습니다.
+
+임무도 같은 방식으로 **생명주기와 판정을 분리**합니다.
+
+| 축 | 값 | 의미 |
+| --- | --- | --- |
+| 임무 상태 `status` | `DRAFT` `READY` `ACTIVE` `COMPLETED` `ABORTED` | 임무가 어디까지 진행됐는가 |
+| 체크포인트 판정 `state` | `PLANNED` `VISITED` `MISSED` `UNKNOWN` | 그 지점이 실제로 순찰됐는가 |
+
+통과는 **신뢰할 수 있는 관측**만 인정합니다. 진행 중인 임무에는 `MISSED`가 없고,
+종료된 임무라도 그 시간대에 신뢰 관측이 없었다면 `MISSED`가 아니라 `UNKNOWN`입니다.
+`통과 + 미순찰`의 합은 전체와 다를 수 있으며, 화면은 그 간격을 그대로 보여줍니다.
+중단은 오류가 아니라 사유를 기록하는 정상 종료입니다. 배경·제한사항·관측 지표는
+[docs/adr/0003-patrol-mission-lifecycle-and-coverage.md](docs/adr/0003-patrol-mission-lifecycle-and-coverage.md)에 있습니다.
+
+쓰기 요청은 두 가지 규칙을 따릅니다 — 전이는 호출자가 읽은 `version`을 함께 보내야
+하고(낡으면 `STALE_VERSION`으로 거부), 임무 생성은 `Idempotency-Key`를 요구합니다.
+엔드포인트와 오류 코드는 [contracts/README.md](contracts/README.md)에 정리돼 있습니다.
 
 ## 사전 요구사항
 
@@ -97,7 +120,12 @@ pnpm dev     # 저장소 루트에서 실행
 ```
 
 브라우저에서 `http://localhost:5173`을 엽니다. Vite는 IPv6 루프백(`::1`)에 바인딩되므로
-`localhost`로 접속하세요. `VITE_API_BASE_URL`은 저장소 루트의 `.env`에서 읽습니다
+`localhost`로 접속하세요. 화면은 두 개이고 서로 링크로 이동합니다.
+
+| 경로 | 화면 |
+| --- | --- |
+| `/` | 운영상황도 — 순찰체 상태와 관측 신선도 |
+| `/missions` | 순찰 임무 — 계획·승인·실행·중단과 coverage | `VITE_API_BASE_URL`은 저장소 루트의 `.env`에서 읽습니다
 (`vite.config.ts`의 `envDir`).
 
 ## 테스트
@@ -136,3 +164,6 @@ DB 제약은 가짜 저장소로 증명할 수 없기 때문입니다. 데이터
 - Day01-02 문서의 `FRESH/STALE/MISSING`을 신선도 축으로, `종합_기획_문서/06_React_관제UI.md`의
   `NORMAL/WARNING/CRITICAL/UNKNOWN`을 상태 축으로 채택했습니다. 초기 세팅 문서와
   이전 시나리오 문서가 쓰던 단일 `NORMAL/STALE/MISSING` enum은 제거했습니다.
+- `종합_기획_문서/03_Go_임무API_아키텍처.md` §5는 `/checkpoints`를 독립 엔드포인트로
+  적어두었지만, 승인이 계획을 임무 버전에 고정해야 하므로 체크포인트와 배정을 임무
+  하위 자원으로 두었습니다. 이유는 ADR 0003에 있습니다.
