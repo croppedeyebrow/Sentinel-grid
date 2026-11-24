@@ -61,8 +61,10 @@ func run(logger *slog.Logger) error {
 		Register(mux)
 
 	server := &http.Server{
-		Addr:              ":" + settings.APIPort,
-		Handler:           httpx.WithCORS(mux, settings.AllowedOrigins),
+		Addr: ":" + settings.APIPort,
+		// Every request gets an id and one log line; the cross-origin rules
+		// are applied once for the whole service.
+		Handler:           httpx.WithRequestLog(httpx.WithCORS(mux, settings.AllowedOrigins), logger),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

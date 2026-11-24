@@ -105,9 +105,20 @@ pnpm dev     # 저장소 루트에서 실행
 ```powershell
 pnpm test                          # vitest: 계약·UI 모델·화면 상태
 pnpm build                         # tsc -b + vite build (strict 타입 검사 포함)
-cd services\mission-api; go test ./...
+cd services\mission-api; go test ./...          # 통합 시험 포함 (DB 필요)
+cd services\mission-api; go test -short ./...   # DB 없이 단위 시험만
 cd services\mission-api; go vet ./...
 ```
+
+Go 시험에는 실제 PostgreSQL을 쓰는 통합 시험이 포함됩니다. 공간 질의, 낙관적 잠금,
+DB 제약은 가짜 저장소로 증명할 수 없기 때문입니다. 데이터베이스에 연결할 수 없으면 해당
+시험은 **건너뜁니다**(`-short`로 명시적으로 제외 가능). 접속 정보는 `POSTGRES_DSN`을
+따르며, 시험이 만든 임무는 종료 시 스스로 삭제합니다.
+
+의존성 중단 시 동작은 [docs/scenarios/patrol-mission.md](docs/scenarios/patrol-mission.md)의
+"Representative failure drill" 절차로 확인합니다 — `/health/live`는 200을 유지하고
+읽기·쓰기는 503 `PROJECTION_UNAVAILABLE`을 반환하며, 데이터베이스 복구 후 API 재시작 없이
+정상화됩니다.
 
 계약은 양쪽에서 같은 파일로 검증합니다. Go 시험은 응답과 커밋된 예시를
 `contracts/schemas/operational-picture.schema.json`에 대해 확인하고, 콘솔 시험은 같은

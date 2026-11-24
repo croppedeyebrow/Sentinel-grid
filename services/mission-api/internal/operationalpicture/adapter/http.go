@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/domain"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/httpx"
 )
 
 // PictureService builds the read model this adapter serves.
@@ -67,7 +68,8 @@ func (h *Handler) ready(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := h.probe.Ping(ctx); err != nil {
-		h.logger.WarnContext(ctx, "readiness probe failed", slog.Any("error", err))
+		h.logger.WarnContext(ctx, "readiness probe failed",
+			slog.String("request_id", httpx.RequestID(ctx)), slog.Any("error", err))
 		writeJSON(w, http.StatusServiceUnavailable, healthResponse{Status: "unavailable", Reason: "projection store unreachable"}, h.logger)
 		return
 	}
@@ -77,7 +79,8 @@ func (h *Handler) ready(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) operationalPicture(w http.ResponseWriter, r *http.Request) {
 	picture, err := h.service.OperationalPicture(r.Context())
 	if err != nil {
-		h.logger.ErrorContext(r.Context(), "operational picture unavailable", slog.Any("error", err))
+		h.logger.ErrorContext(r.Context(), "operational picture unavailable",
+			slog.String("request_id", httpx.RequestID(r.Context())), slog.Any("error", err))
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "operational picture unavailable"}, h.logger)
 		return
 	}

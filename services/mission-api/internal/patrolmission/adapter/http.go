@@ -12,6 +12,7 @@ import (
 
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/application"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/domain"
+	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/httpx"
 )
 
 // MissionService is the use case surface this adapter serves.
@@ -259,11 +260,18 @@ func decode(r *http.Request, target any) (string, bool) {
 
 func (h *Handler) fail(w http.ResponseWriter, r *http.Request, err error) {
 	status, response := refusal(err)
+	// The request id ties this line to the request log entry, so a refusal an
+	// operator reports can be found with the request that caused it.
+	fields := []any{
+		slog.String("request_id", httpx.RequestID(r.Context())),
+		slog.String("code", response.Code),
+		slog.Any("error", err),
+	}
+
 	if status >= http.StatusInternalServerError {
-		h.logger.ErrorContext(r.Context(), "mission request failed", slog.Any("error", err))
+		h.logger.ErrorContext(r.Context(), "mission request failed", fields...)
 	} else {
-		h.logger.InfoContext(r.Context(), "mission request refused",
-			slog.String("code", response.Code), slog.Any("error", err))
+		h.logger.InfoContext(r.Context(), "mission request refused", fields...)
 	}
 	h.write(w, status, response)
 }

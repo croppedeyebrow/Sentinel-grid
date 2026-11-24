@@ -162,13 +162,29 @@ step 3. They are recorded here rather than left in the mock.
    or `UNKNOWN`, the three readings deliberately leave a gap. The screen shows
    that gap instead of normalising it away.
 
-## Verification plan
+## Verification
 
 | What | Where |
 |---|---|
-| Mission and assignment transitions, rejections | `internal/patrolmission/domain` table-driven tests |
-| Coverage judgement including the `UNKNOWN` case | same package, driven by observation fixtures |
-| Containment and overlap queries | `adapter` tests against the real database |
-| Contract | JSON Schema in `contracts/`, validated from both the Go and console sides as in the previous slice |
-| Screen states | console tests for draft, ready, active, completed, aborted, plus loading, empty and error |
-| Representative failure | stale-observation run that leaves coverage unchanged |
+| Mission and assignment transitions, refusals | `internal/patrolmission/domain/mission_test.go`, `assignment_test.go` |
+| Coverage judgement including `PLANNED` and `UNKNOWN` | `domain/checkpoint_test.go`, `evidence_test.go` |
+| Use cases: idempotent create, conflict refusal, version locking | `application/service_test.go` with a fake repository |
+| Containment, overlap and observation queries on the real database | `adapter/postgres_integration_test.go` (skips without a database) |
+| Optimistic locking under two writers | same file: the second write is refused and the first stands |
+| Constraints as a backstop | same file: the database refuses an abort with no reason, and a running mission that was never approved |
+| Contract | `platform/contracts` and the console's `missionContract.test.ts` validate the same files; the handler's responses and refusals are validated in `adapter/http_test.go` |
+| Refusal codes and their details | `adapter/http_test.go` covers every published code |
+| Screen states and requests | `apps/console/src/tests/PatrolMissionPage.test.tsx`: list, judgement, version sent with a transition, refusal wording, abort reason, draft creation with an idempotency key, loading and error |
+| Request tracing | `platform/httpx/httpx_test.go`: one log line per request, shared request id, `X-Request-Id` on every response |
+
+## Representative failure drill
+
+Run with the service up, against the real database:
+
+1. `docker compose stop postgres`
+2. `GET /health/live` stays 200; `GET /health/ready`, `GET /api/v1/missions` and any
+   write return 503 with `PROJECTION_UNAVAILABLE`.
+3. `docker compose up -d --wait postgres` — the service recovers without a restart.
+
+The log lines for the failed requests carry the same `request_id` as the
+refusals they produced, which is how a report from an operator is traced back.
