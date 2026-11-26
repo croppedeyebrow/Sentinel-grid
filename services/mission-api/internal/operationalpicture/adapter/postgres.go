@@ -51,11 +51,19 @@ ORDER BY route.name, route.id`
 
 // unitQuery keeps units without a snapshot in the result: a unit the platform
 // has never heard from is part of the picture, reported as unknown.
+// unitQuery reads each sensor with its own measurement and receipt time, so a
+// stale position no longer ages a fresh battery, and the stream columns that
+// say whether anything is arriving at all.
 const unitQuery = `
 SELECT unit.id::text, unit.callsign, unit.display_name,
        ST_Y(snapshot.position::geometry), ST_X(snapshot.position::geometry),
        snapshot.battery_level, snapshot.link_quality,
-       snapshot.observed_at, snapshot.received_at
+       snapshot.position_observed_at, snapshot.position_received_at,
+       snapshot.battery_observed_at, snapshot.battery_received_at,
+       snapshot.link_observed_at, snapshot.link_received_at,
+       snapshot.session_id, snapshot.session_started_at,
+       coalesce(snapshot.missing_frames, 0), coalesce(snapshot.rejected_frames, 0),
+       snapshot.last_received_at
 FROM patrol_units unit
 LEFT JOIN patrol_unit_snapshots snapshot ON snapshot.patrol_unit_id = unit.id
 WHERE unit.site_profile_id = $1
@@ -191,29 +199,58 @@ func (r *PostgresReader) loadUnits(ctx context.Context, siteID string) ([]domain
 	units := make([]domain.PatrolUnitSnapshot, 0)
 	for rows.Next() {
 		var (
-			unit                   domain.PatrolUnitSnapshot
-			latitude, longitude    *float64
-			battery, link          *int16
-			observedAt, receivedAt *time.Time
+			unit                                   domain.PatrolUnitSnapshot
+			latitude, longitude                    *float64
+			battery, link                          *int16
+			positionObservedAt, positionReceivedAt *time.Time
+			batteryObservedAt, batteryReceivedAt   *time.Time
+			linkObservedAt, linkReceivedAt         *time.Time
+			sessionID                              *string
+			sessionStartedAt, lastReceivedAt       *time.Time
+			missingFrames, rejectedFrames          int64
 		)
 		if err := rows.Scan(
 			&unit.UnitID, &unit.Callsign, &unit.DisplayName,
 			&latitude, &longitude,
 			&battery, &link,
-			&observedAt, &receivedAt,
+			&positionObservedAt, &positionReceivedAt,
+			&batteryObservedAt, &batteryReceivedAt,
+			&linkObservedAt, &linkReceivedAt,
+			&sessionID, &sessionStartedAt,
+			&missingFrames, &rejectedFrames,
+			&lastReceivedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan patrol unit: %w", err)
 		}
 
-		// Every field of one snapshot row shares its observation and receipt
-		// times. Per-sensor timestamps arrive with the Telemetry Reliability
-		// slice; until then a field is missing only when its value is absent.
-		unit.Position = domain.Observed[domain.Position]{ObservedAt: observedAt, ReceivedAt: receivedAt}
+		// Each sensor is read with its own pair of times, which is what lets
+		// one sensor go stale while another stays current.
+		unit.Position = domain.Observed[domain.Position]{
+			ObservedAt: positionObservedAt,
+			ReceivedAt: positionReceivedAt,
+		}
 		if latitude != nil && longitude != nil {
 			unit.Position.Value = &domain.Position{Latitude: *latitude, Longitude: *longitude}
 		}
-		unit.Battery = domain.Observed[int]{Value: percent(battery), ObservedAt: observedAt, ReceivedAt: receivedAt}
-		unit.Link = domain.Observed[int]{Value: percent(link), ObservedAt: observedAt, ReceivedAt: receivedAt}
+		unit.Battery = domain.Observed[int]{
+			Value:      percent(battery),
+			ObservedAt: batteryObservedAt,
+			ReceivedAt: batteryReceivedAt,
+		}
+		unit.Link = domain.Observed[int]{
+			Value:      percent(link),
+			ObservedAt: linkObservedAt,
+			ReceivedAt: linkReceivedAt,
+		}
+		unit.Stream = domain.UnitStream{
+			SessionStartedAt: sessionStartedAt,
+			LastReceivedAt:   lastReceivedAt,
+			MissingFrames:    missingFrames,
+			RejectedFrames:   rejectedFrames,
+		}
+		if sessionID != nil {
+			unit.Stream.SessionID = *sessionID
+		}
 
 		units = append(units, unit)
 	}

@@ -29,5 +29,43 @@ services:
       retries: 20
       start_period: 60s
 
+  # Telemetry passes through Redis Streams on its way from the gateway to the
+  # Go consumer. It carries no durable state the platform depends on: the
+  # projection and the receipt log live in PostgreSQL.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  telemetry-gateway:
+    build:
+      context: ./services/telemetry-gateway
+    environment:
+      TELEMETRY_BIND_ADDRESS: 0.0.0.0:8090
+      # The gateway refuses to start without a token rather than accepting
+      # unauthenticated frames because a variable was forgotten.
+      TELEMETRY_TOKEN: ${TELEMETRY_TOKEN:-local-telemetry-token}
+      REDIS_URL: redis://redis:6379
+      POSTGRES_DSN: postgres://sentinel:${POSTGRES_PASSWORD:-change-me}@postgres:5432/sentinel_grid?sslmode=disable
+    ports:
+      - "8090:8090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8090/health/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
 volumes:
   sentinel-postgres:

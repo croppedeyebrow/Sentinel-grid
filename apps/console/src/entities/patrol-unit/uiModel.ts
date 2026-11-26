@@ -5,7 +5,9 @@ import type {
   ObservedPosition,
   PatrolUnitDto,
   Position,
+  StreamState,
   UnitStatus,
+  UnitStream,
 } from './model'
 
 /**
@@ -65,6 +67,8 @@ export interface UiPatrolUnit {
   /** Fields whose observation is not fresh, named for the operator. */
   evidenceGaps: string[]
   statusExplanation: string
+  /** Telemetry health, which answers whether anything is arriving at all. */
+  stream: UiStream
 }
 
 const SECOND = 1000
@@ -160,6 +164,50 @@ function explainStatus(unit: PatrolUnitDto, policy: ObservationPolicy, gaps: str
   return '모든 관측이 최신이고 기준 이내입니다.'
 }
 
+export const streamStateLabel: Record<StreamState, string> = {
+  STREAMING: '수신 중',
+  SILENT: '수신 끊김',
+  NEVER_SEEN: '수신 기록 없음',
+}
+
+export interface UiStream {
+  state: StreamState
+  label: string
+  /** True while frames are arriving, which is not the same as values being current. */
+  arriving: boolean
+  lastReceivedAgoLabel: string | null
+  sessionAgoLabel: string | null
+  reconnected: boolean
+  missingFrames: number
+  rejectedFrames: number
+  /** Short sentence naming what is wrong with the stream, empty when nothing is. */
+  warning: string
+}
+
+/**
+ * Describes the telemetry health of a unit. Kept apart from the condition axis
+ * on purpose: a unit that stopped transmitting is undecided, not failing.
+ */
+export function toUiStream(stream: UnitStream, now: Date): UiStream {
+  const problems: string[] = []
+  if (stream.state === 'SILENT') problems.push('프레임이 도착하지 않습니다')
+  if (stream.state === 'NEVER_SEEN') problems.push('수신 기록이 없습니다')
+  if (stream.missingFrames > 0) problems.push(`누락 ${stream.missingFrames}프레임`)
+  if (stream.rejectedFrames > 0) problems.push(`거부 ${stream.rejectedFrames}프레임`)
+
+  return {
+    state: stream.state,
+    label: streamStateLabel[stream.state],
+    arriving: stream.state === 'STREAMING',
+    lastReceivedAgoLabel: formatAge(stream.lastReceivedAt, now),
+    sessionAgoLabel: formatAge(stream.sessionStartedAt, now),
+    reconnected: stream.reconnected,
+    missingFrames: stream.missingFrames,
+    rejectedFrames: stream.rejectedFrames,
+    warning: problems.join(' · '),
+  }
+}
+
 export function toUiPatrolUnit(
   unit: PatrolUnitDto,
   policy: ObservationPolicy,
@@ -178,6 +226,7 @@ export function toUiPatrolUnit(
     link: observation(unit.link, now, '%'),
     evidenceGaps: gaps,
     statusExplanation: explainStatus(unit, policy, gaps),
+    stream: toUiStream(unit.stream, now),
   }
 }
 
@@ -192,6 +241,10 @@ export function countUntrustedPositions(units: readonly UiPatrolUnit[]): number 
   return units.filter((unit) => !unit.position.trusted).length
 }
 
+/** Units whose telemetry is not arriving at all. */
+export function countSilentStreams(units: readonly UiPatrolUnit[]): number {
+  return units.filter((unit) => !unit.stream.arriving).length
+}
 export function describePolicy(policy: ObservationPolicy): string {
   return `위치 ${policy.positionStaleAfterSeconds}초 · 배터리 ${policy.batteryStaleAfterSeconds}초 · 링크 ${policy.linkStaleAfterSeconds}초 이후 지연`
 }

@@ -8,10 +8,16 @@
 //! business, as `종합_기획_문서/04_Rust_텔레메트리_통신.md` §3 requires.
 //!
 //! Nothing that arrives is thrown away. A frame that cannot be applied is
-//! still reported with the reason, so the platform keeps the fact of receipt.
+//! still published as a receipt with the reason, so the platform keeps the
+//! fact of receipt.
 
+pub mod config;
+pub mod event;
 pub mod frame;
+pub mod http;
+pub mod publisher;
+pub mod registry;
 pub mod sequence;
 
-pub use frame::{decode, Frame, Limits, Position, Rejection, Sensors};
+pub use frame::{decode, validate, Frame, Limits, Position, Rejection, Sensors};
 pub use sequence::{Classification, SessionTracker};

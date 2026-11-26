@@ -29,6 +29,10 @@ type PatrolUnitSnapshot struct {
 	Position Observed[Position]
 	Battery  Observed[int]
 	Link     Observed[int]
+
+	// Stream is how this unit's telemetry is behaving, which is separate
+	// from what it measured.
+	Stream UnitStream
 }
 
 // PatrolUnitView is a snapshot resolved against a policy at a point in time:
@@ -42,6 +46,12 @@ type PatrolUnitView struct {
 	Position Evaluated[Position]
 	Battery  Evaluated[int]
 	Link     Evaluated[int]
+
+	// Stream carries the telemetry health of the unit, resolved against the
+	// same moment as the readings.
+	Stream EvaluatedStream
+	// Reconnected is true when the current session began inside the window.
+	Reconnected bool
 }
 
 // Evaluate resolves freshness per field and derives the unit condition.
@@ -53,6 +63,8 @@ func (s PatrolUnitSnapshot) Evaluate(now time.Time, policy ObservationPolicy) Pa
 		Position:    s.Position.Evaluate(now, policy.PositionWindow),
 		Battery:     s.Battery.Evaluate(now, policy.BatteryWindow),
 		Link:        s.Link.Evaluate(now, policy.LinkWindow),
+		Stream:      s.Stream.Evaluate(now, policy.PositionWindow),
+		Reconnected: s.Stream.Reconnected(now, policy.PositionWindow),
 	}
 	view.Status = deriveStatus(view, policy)
 	return view

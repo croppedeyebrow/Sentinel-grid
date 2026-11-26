@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { UnitStatus } from '../../entities/patrol-unit/model'
 import {
+  countSilentStreams,
   countUntrustedPositions,
   describePolicy,
   statusLabel,
@@ -52,11 +53,18 @@ function UnitCard({ unit }: { unit: UiPatrolUnit }) {
         <Metric label="위치" observation={unit.position} />
       </dl>
 
-      {unit.position.receivedAgoLabel ? (
-        <p className="unit-card__received">마지막 수신 {unit.position.receivedAgoLabel}</p>
-      ) : (
-        <p className="unit-card__received">수신 기록 없음</p>
-      )}
+      <div className={`stream stream--${unit.stream.state.toLowerCase()}`}>
+        <span className="stream__state">{unit.stream.label}</span>
+        <span className="stream__received">
+          {unit.stream.lastReceivedAgoLabel === null
+            ? '수신 기록 없음'
+            : `마지막 수신 ${unit.stream.lastReceivedAgoLabel}`}
+        </span>
+        {unit.stream.reconnected ? <span className="stream__badge">재접속</span> : null}
+        {unit.stream.warning === '' ? null : (
+          <span className="stream__warning">{unit.stream.warning}</span>
+        )}
+      </div>
     </article>
   )
 }
@@ -91,6 +99,7 @@ export function OperationalPicturePage() {
   const units = picture.units.map((unit) => toUiPatrolUnit(unit, picture.site.policy, judgedAt))
   const summary = summarizeStatuses(units)
   const untrustedPositions = countUntrustedPositions(units)
+  const silentStreams = countSilentStreams(units)
 
   return (
     <main className="shell">
@@ -107,6 +116,9 @@ export function OperationalPicturePage() {
           </p>
           <p className="trust-note">
             위치 미신뢰 {untrustedPositions} / {units.length}
+          </p>
+          <p className="trust-note">
+            수신 끊김 {silentStreams} / {units.length}
           </p>
           <Link className="nav-link" to="/missions">
             순찰 임무로 이동

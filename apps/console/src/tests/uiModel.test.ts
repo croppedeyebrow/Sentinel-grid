@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ObservationPolicy, PatrolUnitDto } from '../entities/patrol-unit/model'
 import {
+  countSilentStreams,
   countUntrustedPositions,
   formatAge,
   summarizeStatuses,
   toUiPatrolUnit,
+  toUiStream,
 } from '../entities/patrol-unit/uiModel'
 
 const judgedAt = new Date('2026-11-12T09:00:00Z')
@@ -42,6 +44,15 @@ function unit(overrides: Partial<PatrolUnitDto> = {}): PatrolUnitDto {
       observedAt: '2026-11-12T08:59:55Z',
       receivedAt: '2026-11-12T09:00:00Z',
       freshness: 'FRESH',
+    },
+    stream: {
+      state: 'STREAMING',
+      sessionId: 'session-1',
+      sessionStartedAt: '2026-11-12T08:30:00Z',
+      lastReceivedAt: '2026-11-12T09:00:00Z',
+      reconnected: false,
+      missingFrames: 0,
+      rejectedFrames: 0,
     },
     ...overrides,
   }
@@ -198,5 +209,94 @@ describe('summaries', () => {
 
   it('counts positions that cannot be trusted as current', () => {
     expect(countUntrustedPositions(views)).toBe(1)
+  })
+})
+
+describe('toUiStream', () => {
+  const streaming = {
+    state: 'STREAMING' as const,
+    sessionId: 'session-1',
+    sessionStartedAt: '2026-11-12T08:30:00Z',
+    lastReceivedAt: '2026-11-12T08:59:58Z',
+    reconnected: false,
+    missingFrames: 0,
+    rejectedFrames: 0,
+  }
+
+  it('says frames are arriving and nothing is wrong', () => {
+    const stream = toUiStream(streaming, judgedAt)
+
+    expect(stream.arriving).toBe(true)
+    expect(stream.label).toBe('수신 중')
+    expect(stream.lastReceivedAgoLabel).toBe('2초 전')
+    expect(stream.warning).toBe('')
+  })
+
+  it('names silence as the problem it is', () => {
+    const stream = toUiStream(
+      { ...streaming, state: 'SILENT', lastReceivedAt: '2026-11-12T08:20:00Z' },
+      judgedAt,
+    )
+
+    expect(stream.arriving).toBe(false)
+    expect(stream.label).toBe('수신 끊김')
+    expect(stream.lastReceivedAgoLabel).toBe('40분 전')
+    expect(stream.warning).toContain('도착하지 않습니다')
+  })
+
+  it('reports an incomplete stream and refused frames together', () => {
+    const stream = toUiStream({ ...streaming, missingFrames: 3, rejectedFrames: 2 }, judgedAt)
+
+    expect(stream.warning).toContain('누락 3프레임')
+    expect(stream.warning).toContain('거부 2프레임')
+  })
+
+  it('distinguishes a unit never heard from', () => {
+    const stream = toUiStream(
+      {
+        state: 'NEVER_SEEN',
+        sessionId: null,
+        sessionStartedAt: null,
+        lastReceivedAt: null,
+        reconnected: false,
+        missingFrames: 0,
+        rejectedFrames: 0,
+      },
+      judgedAt,
+    )
+
+    expect(stream.label).toBe('수신 기록 없음')
+    expect(stream.lastReceivedAgoLabel).toBeNull()
+    expect(stream.warning).toContain('수신 기록이 없습니다')
+  })
+
+  it('passes a reconnect through for the screen to mark', () => {
+    expect(toUiStream({ ...streaming, reconnected: true }, judgedAt).reconnected).toBe(true)
+  })
+})
+
+describe('countSilentStreams', () => {
+  it('counts units whose telemetry is not arriving, regardless of condition', () => {
+    const views = [
+      toUiPatrolUnit(unit({ id: 'a' }), policy, judgedAt),
+      toUiPatrolUnit(
+        unit({
+          id: 'b',
+          stream: {
+            state: 'SILENT',
+            sessionId: 'session-2',
+            sessionStartedAt: '2026-11-12T07:50:00Z',
+            lastReceivedAt: '2026-11-12T08:20:00Z',
+            reconnected: false,
+            missingFrames: 7,
+            rejectedFrames: 0,
+          },
+        }),
+        policy,
+        judgedAt,
+      ),
+    ]
+
+    expect(countSilentStreams(views)).toBe(1)
   })
 })

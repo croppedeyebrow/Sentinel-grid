@@ -4,7 +4,13 @@
   "title": "Operational Picture",
   "description": "Read model of one site: its map context and the latest observation of every patrol unit. Unit condition (status) and observation quality (freshness) are separate fields and must not be collapsed into one.",
   "type": "object",
-  "required": ["generatedAt", "site", "patrolAreas", "patrolRoutes", "units"],
+  "required": [
+    "generatedAt",
+    "site",
+    "patrolAreas",
+    "patrolRoutes",
+    "units"
+  ],
   "additionalProperties": false,
   "properties": {
     "generatedAt": {
@@ -12,49 +18,101 @@
       "format": "date-time",
       "description": "Moment every unit in this response was judged against."
     },
-    "site": { "$ref": "#/$defs/site" },
-    "patrolAreas": { "type": "array", "items": { "$ref": "#/$defs/patrolArea" } },
-    "patrolRoutes": { "type": "array", "items": { "$ref": "#/$defs/patrolRoute" } },
-    "units": { "type": "array", "items": { "$ref": "#/$defs/unit" } }
+    "site": {
+      "$ref": "#/$defs/site"
+    },
+    "patrolAreas": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/patrolArea"
+      }
+    },
+    "patrolRoutes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/patrolRoute"
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    }
   },
   "$defs": {
     "position": {
       "type": "object",
-      "required": ["latitude", "longitude"],
+      "required": [
+        "latitude",
+        "longitude"
+      ],
       "additionalProperties": false,
       "properties": {
-        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
-        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
       }
     },
     "coordinate": {
       "type": "array",
       "minItems": 2,
       "maxItems": 2,
-      "items": { "type": "number" },
+      "items": {
+        "type": "number"
+      },
       "description": "GeoJSON order: longitude, latitude."
     },
     "polygon": {
       "type": "object",
-      "required": ["type", "coordinates"],
+      "required": [
+        "type",
+        "coordinates"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "Polygon" },
+        "type": {
+          "const": "Polygon"
+        },
         "coordinates": {
           "type": "array",
           "minItems": 1,
           "maxItems": 1,
-          "items": { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/coordinate" } }
+          "items": {
+            "type": "array",
+            "minItems": 4,
+            "items": {
+              "$ref": "#/$defs/coordinate"
+            }
+          }
         }
       }
     },
     "lineString": {
       "type": "object",
-      "required": ["type", "coordinates"],
+      "required": [
+        "type",
+        "coordinates"
+      ],
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "LineString" },
-        "coordinates": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/coordinate" } }
+        "type": {
+          "const": "LineString"
+        },
+        "coordinates": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/coordinate"
+          }
+        }
       }
     },
     "observationPolicy": {
@@ -71,89 +129,313 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "positionStaleAfterSeconds": { "type": "integer", "exclusiveMinimum": 0 },
-        "batteryStaleAfterSeconds": { "type": "integer", "exclusiveMinimum": 0 },
-        "linkStaleAfterSeconds": { "type": "integer", "exclusiveMinimum": 0 },
-        "batteryWarningPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "batteryCriticalPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "linkWarningPercent": { "type": "integer", "minimum": 0, "maximum": 100 },
-        "linkCriticalPercent": { "type": "integer", "minimum": 0, "maximum": 100 }
+        "positionStaleAfterSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "batteryStaleAfterSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "linkStaleAfterSeconds": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "batteryWarningPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "batteryCriticalPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "linkWarningPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "linkCriticalPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
       }
     },
     "site": {
       "type": "object",
-      "required": ["id", "name", "center", "policy"],
+      "required": [
+        "id",
+        "name",
+        "center",
+        "policy"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "center": { "$ref": "#/$defs/position" },
-        "policy": { "$ref": "#/$defs/observationPolicy" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "center": {
+          "$ref": "#/$defs/position"
+        },
+        "policy": {
+          "$ref": "#/$defs/observationPolicy"
+        }
       }
     },
     "patrolArea": {
       "type": "object",
-      "required": ["id", "name", "boundary"],
+      "required": [
+        "id",
+        "name",
+        "boundary"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "boundary": { "$ref": "#/$defs/polygon" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary": {
+          "$ref": "#/$defs/polygon"
+        }
       }
     },
     "patrolRoute": {
       "type": "object",
-      "required": ["id", "patrolAreaId", "name", "path"],
+      "required": [
+        "id",
+        "patrolAreaId",
+        "name",
+        "path"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "patrolAreaId": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "path": { "$ref": "#/$defs/lineString" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "patrolAreaId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "$ref": "#/$defs/lineString"
+        }
       }
     },
     "freshness": {
-      "enum": ["FRESH", "STALE", "MISSING"],
+      "enum": [
+        "FRESH",
+        "STALE",
+        "MISSING"
+      ],
       "description": "Data quality axis: FRESH inside the site window, STALE beyond it, MISSING when there is no usable observation."
     },
     "unitStatus": {
-      "enum": ["NORMAL", "WARNING", "CRITICAL", "UNKNOWN"],
+      "enum": [
+        "NORMAL",
+        "WARNING",
+        "CRITICAL",
+        "UNKNOWN"
+      ],
       "description": "Unit condition axis. UNKNOWN whenever the evidence is insufficient; the platform never guesses normal or at risk."
     },
     "observedPosition": {
       "type": "object",
-      "required": ["value", "observedAt", "receivedAt", "freshness"],
+      "required": [
+        "value",
+        "observedAt",
+        "receivedAt",
+        "freshness"
+      ],
       "additionalProperties": false,
       "properties": {
-        "value": { "oneOf": [{ "$ref": "#/$defs/position" }, { "type": "null" }] },
-        "observedAt": { "type": ["string", "null"], "format": "date-time" },
-        "receivedAt": { "type": ["string", "null"], "format": "date-time" },
-        "freshness": { "$ref": "#/$defs/freshness" }
+        "value": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/position"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "receivedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        }
       }
     },
     "observedPercent": {
       "type": "object",
-      "required": ["value", "observedAt", "receivedAt", "freshness"],
+      "required": [
+        "value",
+        "observedAt",
+        "receivedAt",
+        "freshness"
+      ],
       "additionalProperties": false,
       "properties": {
-        "value": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
-        "observedAt": { "type": ["string", "null"], "format": "date-time" },
-        "receivedAt": { "type": ["string", "null"], "format": "date-time" },
-        "freshness": { "$ref": "#/$defs/freshness" }
+        "value": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "observedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "receivedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "freshness": {
+          "$ref": "#/$defs/freshness"
+        }
       }
     },
     "unit": {
       "type": "object",
-      "required": ["id", "callsign", "displayName", "status", "position", "battery", "link"],
+      "required": [
+        "id",
+        "callsign",
+        "displayName",
+        "status",
+        "position",
+        "battery",
+        "link",
+        "stream"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "callsign": { "type": "string", "minLength": 1 },
-        "displayName": { "type": "string", "minLength": 1 },
-        "status": { "$ref": "#/$defs/unitStatus" },
-        "position": { "$ref": "#/$defs/observedPosition" },
-        "battery": { "$ref": "#/$defs/observedPercent" },
-        "link": { "$ref": "#/$defs/observedPercent" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "callsign": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/unitStatus"
+        },
+        "position": {
+          "$ref": "#/$defs/observedPosition"
+        },
+        "battery": {
+          "$ref": "#/$defs/observedPercent"
+        },
+        "link": {
+          "$ref": "#/$defs/observedPercent"
+        },
+        "stream": {
+          "$ref": "#/$defs/stream"
+        }
+      }
+    },
+    "streamState": {
+      "enum": [
+        "STREAMING",
+        "SILENT",
+        "NEVER_SEEN"
+      ],
+      "description": "Whether anything is arriving from the unit. STREAMING: something arrived inside the site's window. SILENT: nothing has for longer than that. NEVER_SEEN: no frame has ever been received, which is not the same as going quiet."
+    },
+    "stream": {
+      "type": "object",
+      "description": "How the unit's telemetry is behaving, as opposed to what it measured. These readings are data quality, not unit condition: a silent unit is UNKNOWN, never a failure.",
+      "required": [
+        "state",
+        "sessionId",
+        "sessionStartedAt",
+        "lastReceivedAt",
+        "reconnected",
+        "missingFrames",
+        "rejectedFrames"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/streamState"
+        },
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "The connected run the readings came from. A reconnect changes it without discarding what was measured."
+        },
+        "sessionStartedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastReceivedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "When anything was last received, which answers whether data is arriving separately from whether it is being measured."
+        },
+        "reconnected": {
+          "type": "boolean",
+          "description": "True when the current session began inside the site's window."
+        },
+        "missingFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Frames the gateway reported as skipped in the current session, so an incomplete stream is visible as incomplete."
+        },
+        "rejectedFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Frames that arrived for this unit and could not be used."
+        }
       }
     }
   }

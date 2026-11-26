@@ -1,0 +1,41 @@
+# The slice's fault catalogue in one run. Every row of the failure table in
+# docs/scenarios/telemetry-reliability.md appears here, so one command
+# exercises the whole catalogue and the same seed reproduces it exactly.
+name: unreliable-link
+seed: 20261126
+ticks: 16
+tickSeconds: 5
+
+units:
+  - unitId: 30000000-0000-0000-0000-000000000001
+    callsign: SG-01
+    latitude: 37.5665
+    longitude: 126.9780
+    battery: 90
+    link: 95
+  - unitId: 30000000-0000-0000-0000-000000000002
+    callsign: SG-02
+    latitude: 37.5685
+    longitude: 126.9820
+    battery: 64
+    link: 80
+
+faults:
+  # A retransmission: the same sequence arrives twice.
+  - { kind: duplicate, atTick: 3, unit: 30000000-0000-0000-0000-000000000001 }
+  # Two frames swap places on the way.
+  - { kind: reorder, atTick: 5, unit: 30000000-0000-0000-0000-000000000001 }
+  # A frame never arrives, leaving a hole in the sequence.
+  - { kind: drop, atTick: 8, unit: 30000000-0000-0000-0000-000000000001 }
+  # Measured on time, received ten minutes later: usable as history, not as a
+  # current reading.
+  - { kind: delay, atTick: 10, unit: 30000000-0000-0000-0000-000000000001, delaySeconds: 600 }
+  # The link drops and the unit comes back with a new session.
+  - { kind: disconnect, atTick: 12, unit: 30000000-0000-0000-0000-000000000001 }
+
+  # A value that cannot be true.
+  - { kind: out_of_range, atTick: 4, unit: 30000000-0000-0000-0000-000000000002 }
+  # A measurement stamped ahead of the gateway's clock.
+  - { kind: future, atTick: 7, unit: 30000000-0000-0000-0000-000000000002 }
+  # A frame larger than the gateway accepts.
+  - { kind: oversized, atTick: 9, unit: 30000000-0000-0000-0000-000000000002 }

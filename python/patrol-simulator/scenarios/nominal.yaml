@@ -1,0 +1,14 @@
+# A clean run: no faults. Used to confirm the pipeline agrees with itself
+# before any fault is introduced.
+name: nominal
+seed: 20261126
+ticks: 12
+tickSeconds: 5
+
+units:
+  - unitId: 30000000-0000-0000-0000-000000000001
+    callsign: SG-01
+    latitude: 37.5665
+    longitude: 126.9780
+    battery: 88
+    link: 96

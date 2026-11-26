@@ -3,7 +3,10 @@
   "site": {
     "id": "10000000-0000-0000-0000-000000000001",
     "name": "Sentinel Test Site",
-    "center": { "latitude": 37.5665, "longitude": 126.978 },
+    "center": {
+      "latitude": 37.5665,
+      "longitude": 126.978
+    },
     "policy": {
       "positionStaleAfterSeconds": 300,
       "batteryStaleAfterSeconds": 600,
@@ -22,11 +25,26 @@
         "type": "Polygon",
         "coordinates": [
           [
-            [126.965, 37.558],
-            [126.991, 37.558],
-            [126.991, 37.575],
-            [126.965, 37.575],
-            [126.965, 37.558]
+            [
+              126.965,
+              37.558
+            ],
+            [
+              126.991,
+              37.558
+            ],
+            [
+              126.991,
+              37.575
+            ],
+            [
+              126.965,
+              37.575
+            ],
+            [
+              126.965,
+              37.558
+            ]
           ]
         ]
       }
@@ -40,12 +58,30 @@
       "path": {
         "type": "LineString",
         "coordinates": [
-          [126.969, 37.56],
-          [126.976, 37.562],
-          [126.985, 37.566],
-          [126.988, 37.572],
-          [126.976, 37.5735],
-          [126.969, 37.56]
+          [
+            126.969,
+            37.56
+          ],
+          [
+            126.976,
+            37.562
+          ],
+          [
+            126.985,
+            37.566
+          ],
+          [
+            126.988,
+            37.572
+          ],
+          [
+            126.976,
+            37.5735
+          ],
+          [
+            126.969,
+            37.56
+          ]
         ]
       }
     }
@@ -57,7 +93,10 @@
       "displayName": "Sentinel One",
       "status": "NORMAL",
       "position": {
-        "value": { "latitude": 37.5665, "longitude": 126.978 },
+        "value": {
+          "latitude": 37.5665,
+          "longitude": 126.978
+        },
         "observedAt": "2026-11-12T08:59:55Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
@@ -73,6 +112,15 @@
         "observedAt": "2026-11-12T08:59:55Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
+      },
+      "stream": {
+        "state": "STREAMING",
+        "sessionId": "seed-session-sg01",
+        "sessionStartedAt": "2026-11-12T08:25:00Z",
+        "lastReceivedAt": "2026-11-12T09:00:00Z",
+        "reconnected": false,
+        "missingFrames": 0,
+        "rejectedFrames": 0
       }
     },
     {
@@ -81,7 +129,10 @@
       "displayName": "Sentinel Two",
       "status": "UNKNOWN",
       "position": {
-        "value": { "latitude": 37.5685, "longitude": 126.982 },
+        "value": {
+          "latitude": 37.5685,
+          "longitude": 126.982
+        },
         "observedAt": "2026-11-12T08:40:00Z",
         "receivedAt": "2026-11-12T08:40:00Z",
         "freshness": "STALE"
@@ -97,6 +148,15 @@
         "observedAt": "2026-11-12T08:40:00Z",
         "receivedAt": "2026-11-12T08:40:00Z",
         "freshness": "STALE"
+      },
+      "stream": {
+        "state": "STREAMING",
+        "sessionId": "seed-session-sg02",
+        "sessionStartedAt": "2026-11-12T08:32:00Z",
+        "lastReceivedAt": "2026-11-12T09:00:00Z",
+        "reconnected": false,
+        "missingFrames": 3,
+        "rejectedFrames": 0
       }
     },
     {
@@ -105,7 +165,10 @@
       "displayName": "Sentinel Three",
       "status": "UNKNOWN",
       "position": {
-        "value": { "latitude": 37.5645, "longitude": 126.973 },
+        "value": {
+          "latitude": 37.5645,
+          "longitude": 126.973
+        },
         "observedAt": "2026-11-12T08:59:50Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
@@ -121,6 +184,15 @@
         "observedAt": "2026-11-12T08:59:50Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
+      },
+      "stream": {
+        "state": "STREAMING",
+        "sessionId": "seed-session-sg03",
+        "sessionStartedAt": "2026-11-12T08:38:00Z",
+        "lastReceivedAt": "2026-11-12T09:00:00Z",
+        "reconnected": false,
+        "missingFrames": 0,
+        "rejectedFrames": 2
       }
     },
     {
@@ -145,6 +217,15 @@
         "observedAt": null,
         "receivedAt": "2026-11-12T08:20:00Z",
         "freshness": "MISSING"
+      },
+      "stream": {
+        "state": "SILENT",
+        "sessionId": "seed-session-sg04",
+        "sessionStartedAt": "2026-11-12T07:50:00Z",
+        "lastReceivedAt": "2026-11-12T08:20:00Z",
+        "reconnected": false,
+        "missingFrames": 7,
+        "rejectedFrames": 0
       }
     },
     {
@@ -153,7 +234,10 @@
       "displayName": "Sentinel Five",
       "status": "WARNING",
       "position": {
-        "value": { "latitude": 37.57, "longitude": 126.97 },
+        "value": {
+          "latitude": 37.57,
+          "longitude": 126.97
+        },
         "observedAt": "2026-11-12T08:59:52Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
@@ -169,6 +253,15 @@
         "observedAt": "2026-11-12T08:59:52Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
+      },
+      "stream": {
+        "state": "STREAMING",
+        "sessionId": "seed-session-sg05",
+        "sessionStartedAt": "2026-11-12T08:42:00Z",
+        "lastReceivedAt": "2026-11-12T09:00:00Z",
+        "reconnected": false,
+        "missingFrames": 0,
+        "rejectedFrames": 0
       }
     },
     {
@@ -177,7 +270,10 @@
       "displayName": "Sentinel Six",
       "status": "CRITICAL",
       "position": {
-        "value": { "latitude": 37.5705, "longitude": 126.986 },
+        "value": {
+          "latitude": 37.5705,
+          "longitude": 126.986
+        },
         "observedAt": "2026-11-12T08:59:54Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
@@ -193,6 +289,15 @@
         "observedAt": "2026-11-12T08:59:54Z",
         "receivedAt": "2026-11-12T09:00:00Z",
         "freshness": "FRESH"
+      },
+      "stream": {
+        "state": "STREAMING",
+        "sessionId": "seed-session-sg06",
+        "sessionStartedAt": "2026-11-12T08:58:00Z",
+        "lastReceivedAt": "2026-11-12T09:00:00Z",
+        "reconnected": true,
+        "missingFrames": 0,
+        "rejectedFrames": 0
       }
     }
   ]

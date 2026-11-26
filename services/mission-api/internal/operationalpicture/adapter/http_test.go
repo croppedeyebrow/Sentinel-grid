@@ -54,6 +54,14 @@ func picture() domain.OperationalPicture {
 			},
 			Battery: domain.Evaluated[int]{Value: value(battery), ObservedAt: at(-5 * time.Second), ReceivedAt: at(0), Freshness: domain.FreshnessFresh},
 			Link:    domain.Evaluated[int]{Value: value(link), ObservedAt: at(-5 * time.Second), ReceivedAt: at(0), Freshness: domain.FreshnessFresh},
+			Stream: domain.EvaluatedStream{
+				UnitStream: domain.UnitStream{
+					SessionID:        "session-" + callsign,
+					SessionStartedAt: at(-30 * time.Minute),
+					LastReceivedAt:   at(0),
+				},
+				State: domain.StreamStreaming,
+			},
 		}
 	}
 
@@ -67,6 +75,18 @@ func picture() domain.OperationalPicture {
 		Position: domain.Evaluated[domain.Position]{ReceivedAt: at(-40 * time.Minute), Freshness: domain.FreshnessMissing},
 		Battery:  domain.Evaluated[int]{Value: value(37), ReceivedAt: at(-40 * time.Minute), Freshness: domain.FreshnessMissing},
 		Link:     domain.Evaluated[int]{Value: value(0), ReceivedAt: at(-40 * time.Minute), Freshness: domain.FreshnessMissing},
+		// Nothing has arrived for forty minutes: the stream is silent, which
+		// is a different reading from the sensors being missing.
+		Stream: domain.EvaluatedStream{
+			UnitStream: domain.UnitStream{
+				SessionID:        "session-SG-04",
+				SessionStartedAt: at(-70 * time.Minute),
+				LastReceivedAt:   at(-40 * time.Minute),
+				MissingFrames:    7,
+			},
+			State:     domain.StreamSilent,
+			SilentFor: 40 * time.Minute,
+		},
 	}
 
 	return domain.OperationalPicture{

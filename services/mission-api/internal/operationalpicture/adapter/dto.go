@@ -78,6 +78,7 @@ type patrolUnitDTO struct {
 	Position    observedDTO[positionDTO] `json:"position"`
 	Battery     observedDTO[int]         `json:"battery"`
 	Link        observedDTO[int]         `json:"link"`
+	Stream      streamDTO                `json:"stream"`
 }
 
 func newOperationalPictureDTO(picture domain.OperationalPicture) operationalPictureDTO {
@@ -113,6 +114,7 @@ func newOperationalPictureDTO(picture domain.OperationalPicture) operationalPict
 			Position:    observedPosition(unit.Position),
 			Battery:     observedPercent(unit.Battery),
 			Link:        observedPercent(unit.Link),
+			Stream:      newStreamDTO(unit),
 		})
 	}
 
@@ -175,4 +177,37 @@ func iso(value *time.Time) *string {
 	}
 	formatted := value.UTC().Format(time.RFC3339)
 	return &formatted
+}
+
+// streamDTO is how a unit's telemetry is behaving, as opposed to what it
+// measured. These readings belong to the data quality axis: a silent unit is
+// reported as unknown, never as a failure.
+type streamDTO struct {
+	State            string  `json:"state"`
+	SessionID        *string `json:"sessionId"`
+	SessionStartedAt *string `json:"sessionStartedAt"`
+	LastReceivedAt   *string `json:"lastReceivedAt"`
+	// Reconnected is true when the current session began inside the site's
+	// window, which is what lets the console say a unit just came back.
+	Reconnected bool `json:"reconnected"`
+	// MissingFrames and RejectedFrames make an incomplete or refused stream
+	// visible instead of letting it look like silence.
+	MissingFrames  int64 `json:"missingFrames"`
+	RejectedFrames int64 `json:"rejectedFrames"`
+}
+
+func newStreamDTO(unit domain.PatrolUnitView) streamDTO {
+	dto := streamDTO{
+		State:          string(unit.Stream.State),
+		LastReceivedAt: iso(unit.Stream.LastReceivedAt),
+		Reconnected:    unit.Reconnected,
+		MissingFrames:  unit.Stream.MissingFrames,
+		RejectedFrames: unit.Stream.RejectedFrames,
+	}
+	if unit.Stream.SessionID != "" {
+		session := unit.Stream.SessionID
+		dto.SessionID = &session
+	}
+	dto.SessionStartedAt = iso(unit.Stream.SessionStartedAt)
+	return dto
 }

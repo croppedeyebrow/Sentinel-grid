@@ -69,10 +69,17 @@ the fact of receipt to survive even when the value is not applied. A refused
 frame may not have parsed, so its unit, session and sequence can be null; an
 applied one never can.
 
-Still to come in this slice: the Operational Picture response grows a `stream`
-object per unit — session, last received moment, missing frame count and
-rejected frame count — which lands with the projection that produces those
-numbers rather than being published before anything can fill it.
+The Operational Picture response carries what the projection makes of all this.
+Each observation holds its own `observedAt` and `receivedAt`, so one sensor can
+be stale beside a current one, and each unit carries a `stream` object:
+`state` (`STREAMING`, `SILENT`, `NEVER_SEEN`), `sessionId`, `sessionStartedAt`,
+`lastReceivedAt`, `reconnected`, `missingFrames` and `rejectedFrames`.
+
+`sessionStartedAt` is a **measurement** time — when the current session's first
+frame was measured, not when it arrived. A session change is judged by
+measurement order, because a delayed frame is measured early and received late:
+comparing the two clocks would let the network decide which session a unit is
+on, and a frame of a session that already ended would wind the stream back.
 
 ## Rules every mutation follows
 

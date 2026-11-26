@@ -278,3 +278,174 @@ func TestApplyAdoptsTheUnitOnAnEmptySnapshot(t *testing.T) {
 		t.Errorf("unitId = %q, want unit-1", snapshot.UnitID)
 	}
 }
+
+func TestApplyDoesNotReopenASessionThatAlreadyEnded(t *testing.T) {
+	// A delayed frame from the previous session arrives after the reconnect.
+	// Treating it as a session change would wind the stream state back to a
+	// session that is over.
+	snapshot, _ := UnitSnapshot{}.Apply(event(9, 0))
+
+	reconnect := event(1, 5*time.Minute)
+	reconnect.SessionID = "session-2"
+	snapshot, _ = snapshot.Apply(reconnect)
+
+	late := event(10, time.Minute)
+	late.SessionID = "session-1"
+	late.ReceivedAt = at(6 * time.Minute)
+	late.Classification = ClassificationOutOfOrder
+
+	updated, result := snapshot.Apply(late)
+
+	if updated.SessionID != "session-2" {
+		t.Errorf("session = %s, want the current session-2 kept", updated.SessionID)
+	}
+	if updated.LastSequence != 1 {
+		t.Errorf("lastSequence = %d, want 1: a late frame of an old session is not progress", updated.LastSequence)
+	}
+	if result.Reconnected {
+		t.Error("a frame from a session that ended is not a reconnect")
+	}
+	// It still proves something arrived.
+	if !updated.LastReceivedAt.Equal(at(6 * time.Minute)) {
+		t.Errorf("lastReceivedAt = %s, want the late arrival recorded", updated.LastReceivedAt)
+	}
+	// And its older measurements still lose to the newer ones.
+	if !updated.Battery.ObservedAt.Equal(at(5 * time.Minute)) {
+		t.Error("the newer measurement must survive a late frame")
+	}
+}
+
+func TestApplyStillCountsAGapWithinTheCurrentSession(t *testing.T) {
+	// The guard above must not stop a genuine gap from being recorded.
+	snapshot, _ := UnitSnapshot{}.Apply(event(1, 0))
+
+	gap := event(4, time.Minute)
+	gap.Classification = ClassificationGap
+	gap.MissingFrames = 2
+
+	updated, _ := snapshot.Apply(gap)
+
+	if updated.MissingFrames != 2 || updated.LastSequence != 4 {
+		t.Errorf("stream = missing %d seq %d, want 2 and 4", updated.MissingFrames, updated.LastSequence)
+	}
+}
+
+func TestApplyAccumulatesEveryGapOfASession(t *testing.T) {
+	// The arrival order a real run produced: refused frames leave holes, and
+	// each hole is reported as its own gap. The counter has to add them up.
+	type step struct {
+		sequence       int64
+		classification Classification
+		missing        int64
+	}
+	steps := []step{
+		{1, ClassificationAccepted, 0},
+		{2, ClassificationAccepted, 0},
+		{3, ClassificationAccepted, 0},
+		{5, ClassificationGap, 1},
+		{6, ClassificationAccepted, 0},
+		{8, ClassificationGap, 1},
+		{10, ClassificationGap, 1},
+		{11, ClassificationAccepted, 0},
+	}
+
+	snapshot := UnitSnapshot{}
+	for index, current := range steps {
+		next := event(current.sequence, time.Duration(index)*time.Second)
+		next.Classification = current.classification
+		next.MissingFrames = current.missing
+		snapshot, _ = snapshot.Apply(next)
+	}
+
+	if snapshot.MissingFrames != 3 {
+		t.Errorf("missingFrames = %d, want 3: every gap of the session counts", snapshot.MissingFrames)
+	}
+	if snapshot.LastSequence != 11 {
+		t.Errorf("lastSequence = %d, want 11", snapshot.LastSequence)
+	}
+}
+
+func TestApplyOpensANewSessionEvenWhenItsFramesAreOlderThanWhatIsStored(t *testing.T) {
+	// The live case this rule was written for. A unit that has been quiet
+	// holds readings newer than the first frames of its next connection: the
+	// stored battery was measured seconds before the unit dropped out, while
+	// the new run replays a window that starts minutes back. Judging the
+	// session by "is this the newest measurement" would call the whole new
+	// session a late frame of the old one, and the stream counters would stand
+	// still for as long as the replay lasted.
+	stored := UnitSnapshot{
+		UnitID:           "unit-1",
+		Battery:          &Reading[int]{Value: 90, ObservedAt: at(0), ReceivedAt: at(0)},
+		SessionID:        "session-0",
+		SessionStartedAt: at(-30 * time.Minute),
+		LastSequence:     88,
+	}
+
+	first := event(1, -10*time.Minute)
+	first.SessionID = "session-1"
+	updated, result := stored.Apply(first)
+
+	if !result.Reconnected || updated.SessionID != "session-1" {
+		t.Fatalf("session = %s reconnected = %t, want session-1 adopted as a reconnect",
+			updated.SessionID, result.Reconnected)
+	}
+	if updated.LastSequence != 1 {
+		t.Errorf("lastSequence = %d, want 1: the new session numbers from the start", updated.LastSequence)
+	}
+
+	gap := event(3, -9*time.Minute)
+	gap.SessionID = "session-1"
+	gap.Classification = ClassificationGap
+	gap.MissingFrames = 1
+	updated, _ = updated.Apply(gap)
+
+	if updated.MissingFrames != 1 || updated.LastSequence != 3 {
+		t.Errorf("stream = missing %d seq %d, want 1 and 3: the new session's gaps count",
+			updated.MissingFrames, updated.LastSequence)
+	}
+	// The older replayed measurement still loses to the newer stored one: a
+	// reconnect changes the session, not the history.
+	if updated.Battery.Value != 90 {
+		t.Errorf("battery = %d, want the newer stored measurement kept", updated.Battery.Value)
+	}
+}
+
+func TestApplyJudgesASessionByMeasurementTimeNotArrivalTime(t *testing.T) {
+	// A live run's shape: the frames were measured across a window in the
+	// past and all arrive within the same second. Judging a session change by
+	// arrival time would mean every frame of the new session looks older than
+	// the session already on file, and the stream would never move on.
+	arrival := at(time.Hour)
+
+	frame := func(session string, sequence int64, observed time.Duration) Event {
+		next := event(sequence, observed)
+		next.SessionID = session
+		next.ReceivedAt = arrival
+		return next
+	}
+
+	snapshot := UnitSnapshot{}
+	snapshot, _ = snapshot.Apply(frame("session-1", 1, 0))
+	snapshot, _ = snapshot.Apply(frame("session-1", 2, 10*time.Second))
+
+	// The link drops and the unit comes back: a later measurement, same
+	// arrival second.
+	reconnect := frame("session-2", 1, 40*time.Second)
+	snapshot, result := snapshot.Apply(reconnect)
+
+	if !result.Reconnected || snapshot.SessionID != "session-2" || snapshot.LastSequence != 1 {
+		t.Fatalf("session = %s seq %d reconnected = %t, want session-2 at 1",
+			snapshot.SessionID, snapshot.LastSequence, result.Reconnected)
+	}
+
+	// And the delayed frame of the session that ended, which the simulator
+	// sends last of all, must not drag the stream back to it.
+	late := frame("session-1", 3, 20*time.Second)
+	late.Classification = ClassificationOutOfOrder
+	snapshot, lateResult := snapshot.Apply(late)
+
+	if lateResult.Reconnected || snapshot.SessionID != "session-2" || snapshot.LastSequence != 1 {
+		t.Errorf("session = %s seq %d, want session-2 at 1: a delayed frame of an ended session is not progress",
+			snapshot.SessionID, snapshot.LastSequence)
+	}
+}

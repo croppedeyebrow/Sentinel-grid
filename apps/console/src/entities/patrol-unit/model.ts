@@ -67,6 +67,26 @@ const observed = <T extends z.ZodTypeAny>(value: T) =>
 export const observedPositionSchema = observed(positionSchema)
 export const observedPercentSchema = observed(z.number().int().min(0).max(100))
 
+/**
+ * How a unit's telemetry is behaving, as opposed to what it measured. These
+ * readings belong to the data quality axis: a silent unit is reported as
+ * UNKNOWN, never as a failure.
+ */
+export const streamStateSchema = z.enum(['STREAMING', 'SILENT', 'NEVER_SEEN'])
+
+export const unitStreamSchema = z.object({
+  state: streamStateSchema,
+  sessionId: z.string().min(1).nullable(),
+  sessionStartedAt: isoDateTime.nullable(),
+  /** When anything was last received, separate from when it was measured. */
+  lastReceivedAt: isoDateTime.nullable(),
+  reconnected: z.boolean(),
+  /** Frames the gateway reported as skipped in the current session. */
+  missingFrames: z.number().int().min(0),
+  /** Frames that arrived for this unit and could not be used. */
+  rejectedFrames: z.number().int().min(0),
+})
+
 export const patrolUnitSchema = z.object({
   id: z.string().min(1),
   callsign: z.string().min(1),
@@ -75,6 +95,7 @@ export const patrolUnitSchema = z.object({
   position: observedPositionSchema,
   battery: observedPercentSchema,
   link: observedPercentSchema,
+  stream: unitStreamSchema,
 })
 
 export const operationalPictureSchema = z.object({
@@ -94,5 +115,7 @@ export type PatrolArea = z.infer<typeof patrolAreaSchema>
 export type PatrolRoute = z.infer<typeof patrolRouteSchema>
 export type ObservedPosition = z.infer<typeof observedPositionSchema>
 export type ObservedPercent = z.infer<typeof observedPercentSchema>
+export type StreamState = z.infer<typeof streamStateSchema>
+export type UnitStream = z.infer<typeof unitStreamSchema>
 export type PatrolUnitDto = z.infer<typeof patrolUnitSchema>
 export type OperationalPictureDto = z.infer<typeof operationalPictureSchema>

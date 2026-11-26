@@ -216,3 +216,14 @@ h1, h2, p { margin-top: 0; }
 .checkpoint-list__remove { grid-column: 2; padding: 2px 7px; border: 1px solid #29415b; border-radius: 6px; color: #91a6ba; background: none; font-size: 0.68rem; cursor: pointer; }
 .placing-toggle { width: 100%; margin-top: 12px; padding: 9px; border: 1px dashed #4d82ff; border-radius: 9px; color: #6dc7ff; background: var(--surface-sunken); font-weight: 700; cursor: pointer; }
 .placing-toggle--on { border-style: solid; color: #07111f; background: #6dc7ff; }
+
+/* ---- Telemetry stream health (Day 05-06) ---- */
+
+.stream { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 12px; padding: 9px 11px; border-radius: 9px; background: var(--surface-sunken); font-size: 0.72rem; }
+.stream__state { font-weight: 800; }
+.stream--streaming .stream__state { color: #6dc7ff; }
+.stream--silent .stream__state { color: var(--tone-warning); }
+.stream--never_seen .stream__state { color: var(--tone-unknown); }
+.stream__received { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.stream__badge { padding: 2px 6px; border: 1px solid #6dc7ff; border-radius: 999px; color: #6dc7ff; font-weight: 700; }
+.stream__warning { flex-basis: 100%; color: var(--tone-warning); }

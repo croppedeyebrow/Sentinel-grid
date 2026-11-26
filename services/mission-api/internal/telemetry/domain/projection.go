@@ -54,6 +54,11 @@ type UnitSnapshot struct {
 	// SessionID is the connected run the readings came from. A reconnect
 	// changes it without discarding what was already measured.
 	SessionID string
+	// SessionStartedAt is when the current session's first measurement was
+	// taken, which is what lets the console say a unit just came back rather
+	// than only that it is streaming. It is a measurement time, not a receipt
+	// time, so that it can be compared with the frames that follow.
+	SessionStartedAt time.Time
 	// LastSequence is the furthest point the session reached.
 	LastSequence int64
 	// MissingFrames counts the frames the gateway reported as skipped in the
@@ -125,18 +130,37 @@ func (s UnitSnapshot) Apply(event Event) (UnitSnapshot, ApplyResult) {
 		updated.UnitID = event.UnitID
 	}
 
+	// A frame from a different session is only a reconnect if it could belong
+	// to one. A frame measured before the current session began cannot: it is
+	// a delayed frame of a session that already ended, and treating it as a
+	// session change would wind the stream state back to a session that is
+	// over.
+	//
+	// Both sides of this comparison are measurement times. Measurement and
+	// receipt run on different clocks here — a delayed frame is measured early
+	// and received late — so comparing one against the other would judge a
+	// session by when the network happened to deliver it.
+	newSession := event.SessionID != updated.SessionID
+	staleSession := newSession &&
+		updated.SessionID != "" &&
+		!updated.SessionStartedAt.IsZero() &&
+		event.ObservedAt.Before(updated.SessionStartedAt)
+
 	// A reconnect starts a new session. The readings stay: the unit was there
 	// and measured them, and discarding them would lose the last known
 	// position exactly when the operator needs it most.
-	if event.SessionID != updated.SessionID {
+	if newSession && !staleSession {
 		updated.SessionID = event.SessionID
+		updated.SessionStartedAt = event.ObservedAt
 		updated.LastSequence = 0
 		updated.MissingFrames = 0
 		result.Reconnected = s.SessionID != ""
 		result.Applied = true
 	}
 
-	progressed := event.Sequence > updated.LastSequence
+	// Sequence numbers only mean something within their session, so a late
+	// frame from an old one never moves the stream's progress.
+	progressed := !staleSession && event.Sequence > updated.LastSequence
 	if progressed {
 		updated.LastSequence = event.Sequence
 		if event.Classification == ClassificationGap && event.MissingFrames > 0 {

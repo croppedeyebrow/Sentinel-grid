@@ -4,12 +4,15 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	pictureadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/adapter"
 	pictureapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/application"
@@ -19,6 +22,8 @@ import (
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/httpx"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/ids"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/postgres"
+	telemetryadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/telemetry/adapter"
+	telemetryapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/telemetry/application"
 )
 
 const (
@@ -59,6 +64,36 @@ func run(logger *slog.Logger) error {
 	missionadapter.
 		NewHandler(missionapp.NewService(missionRepository, ids.NewUUID), logger).
 		Register(mux)
+
+	// Telemetry ingest runs alongside the HTTP server: it reads what the
+	// gateway published and projects it. The API keeps serving reads if the
+	// stream is unreachable, so this failure does not take the service down.
+	telemetryClient, err := redis.ParseURL(settings.RedisURL)
+	if err != nil {
+		return fmt.Errorf("parse redis url: %w", err)
+	}
+	streamClient := redis.NewClient(telemetryClient)
+	defer func() { _ = streamClient.Close() }()
+
+	streamReader := telemetryadapter.NewStreamReader(
+		streamClient,
+		telemetryadapter.StreamConfig{
+			Stream:   settings.TelemetryStream,
+			Group:    settings.TelemetryGroup,
+			Consumer: settings.TelemetryConsumer,
+		},
+		telemetryapp.NewConsumer(telemetryadapter.NewPostgresRepository(pool)),
+		logger,
+	)
+
+	go func() {
+		logger.Info("telemetry consumer starting",
+			slog.String("stream", settings.TelemetryStream),
+			slog.String("group", settings.TelemetryGroup))
+		if err := streamReader.Run(ctx); err != nil {
+			logger.Error("telemetry consumer stopped", slog.Any("error", err))
+		}
+	}()
 
 	server := &http.Server{
 		Addr: ":" + settings.APIPort,
