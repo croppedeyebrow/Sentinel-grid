@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/telemetry-receipt.schema.json",
+  "title": "Telemetry frame receipt",
+  "description": "What the gateway answers for an accepted frame. The outcome says where the frame sat in its session's sequence, and lastAcceptedSequence is the resume point a reconnecting unit needs — a unit holding buffered frames can continue from there without resending what already arrived.",
+  "type": "object",
+  "required": ["outcome", "unitId", "sessionId", "sequence", "receivedAt", "lastAcceptedSequence"],
+  "additionalProperties": false,
+  "properties": {
+    "outcome": {
+      "enum": ["ACCEPTED", "DUPLICATE", "OUT_OF_ORDER", "GAP"],
+      "description": "ACCEPTED: the expected frame, or the first of a session. DUPLICATE: this sequence was already seen, nothing is applied. OUT_OF_ORDER: behind the session's progress, applied per sensor only where the measurement is newer. GAP: ahead of the expected sequence, applied, with the missing range recorded."
+    },
+    "unitId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the gateway accepted the frame, which together with observedAt decides whether the measurement may prove a position."
+    },
+    "lastAcceptedSequence": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Highest sequence accepted for this unit across sessions. A late frame does not move it backwards."
+    },
+    "missingFrames": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many sequence numbers were skipped. Present only when the outcome is GAP."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "GAP" } }, "required": ["outcome"] },
+      "then": { "required": ["missingFrames"] },
+      "else": { "not": { "required": ["missingFrames"] } }
+    }
+  ]
+}

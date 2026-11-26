@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/telemetry-event.schema.json",
+  "title": "Telemetry event",
+  "description": "What the gateway publishes to the telemetry stream, and what the receipt log stores. Everything that arrived appears here, including what was refused: the platform keeps the fact of receipt even when the value is not applied. A refused frame may not have parsed, so its unit, session and sequence can be unknown.",
+  "type": "object",
+  "required": ["eventId", "outcome", "receivedAt", "frameBytes"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Assigned by the gateway. The consumer is idempotent on unit, session and sequence; this id identifies the receipt itself."
+    },
+    "outcome": {
+      "enum": ["ACCEPTED", "DUPLICATE", "OUT_OF_ORDER", "GAP", "REJECTED"],
+      "description": "The gateway's verdict. Only REJECTED means the frame never entered the platform."
+    },
+    "unitId": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "Null only when the frame could not be parsed far enough to tell."
+    },
+    "sessionId": { "type": ["string", "null"], "minLength": 1 },
+    "sequence": { "type": ["integer", "null"], "minimum": 1 },
+    "observedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When the unit measured the values. Null for a frame that was refused before it could be read."
+    },
+    "receivedAt": { "type": "string", "format": "date-time" },
+    "sensors": {
+      "description": "The values the frame reported. Null for a refused frame.",
+      "oneOf": [{ "$ref": "#/$defs/sensors" }, { "type": "null" }]
+    },
+    "missingFrames": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Skipped sequence numbers, set when the outcome is GAP."
+    },
+    "rejection": {
+      "description": "Why the frame was refused. Present only when the outcome is REJECTED.",
+      "oneOf": [{ "$ref": "#/$defs/rejection" }, { "type": "null" }]
+    },
+    "frameBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size of what arrived, which is how an oversized frame is still accounted for."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "REJECTED" } }, "required": ["outcome"] },
+      "then": { "required": ["rejection"], "properties": { "rejection": { "$ref": "#/$defs/rejection" } } }
+    },
+    {
+      "if": {
+        "properties": { "outcome": { "enum": ["ACCEPTED", "DUPLICATE", "OUT_OF_ORDER", "GAP"] } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "required": ["unitId", "sessionId", "sequence", "observedAt", "sensors"],
+        "properties": {
+          "unitId": { "type": "string" },
+          "sessionId": { "type": "string" },
+          "sequence": { "type": "integer" },
+          "observedAt": { "type": "string" },
+          "sensors": { "$ref": "#/$defs/sensors" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sensors": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "type": "object",
+          "required": ["latitude", "longitude"],
+          "additionalProperties": false,
+          "properties": {
+            "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+            "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+          }
+        },
+        "battery": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "link": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "rejection": {
+      "type": "object",
+      "required": ["code", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "$ref": "#/$defs/rejectionCode" },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rejectionCode": {
+      "enum": [
+        "MALFORMED_FRAME",
+        "FRAME_TOO_LARGE",
+        "NO_SENSOR_VALUE",
+        "VALUE_OUT_OF_RANGE",
+        "INVALID_SEQUENCE",
+        "MEASURED_IN_FUTURE",
+        "UNKNOWN_UNIT"
+      ]
+    }
+  }
+}

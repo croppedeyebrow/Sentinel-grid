@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/telemetry-frame.schema.json",
+  "title": "Telemetry frame",
+  "description": "One frame as a patrol unit reports it to the gateway. A frame carries the moment the values were measured, which is not the moment they arrive, and may report any subset of the sensors: a unit that only measured its battery sends only a battery.",
+  "type": "object",
+  "required": ["unitId", "sessionId", "sequence", "observedAt", "sensors"],
+  "additionalProperties": false,
+  "properties": {
+    "unitId": { "type": "string", "minLength": 1 },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One connected run of this unit. A reconnect starts a new session, and sequence numbering restarts with it."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Position within the session, increasing by one. The gateway classifies anything else as duplicate, out of order, or a gap."
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the unit measured the values. A measurement claiming to be ahead of the gateway's clock by more than the allowed skew is refused."
+    },
+    "sensors": { "$ref": "#/$defs/sensors" }
+  },
+  "$defs": {
+    "sensors": {
+      "type": "object",
+      "description": "At least one sensor must be reported; an empty frame has nothing to apply.",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "position": { "$ref": "#/$defs/position" },
+        "battery": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "link": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "position": {
+      "type": "object",
+      "required": ["latitude", "longitude"],
+      "additionalProperties": false,
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    }
+  }
+}

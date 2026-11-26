@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sentinel-grid.local/schemas/telemetry-resume.schema.json",
+  "title": "Telemetry resume point",
+  "description": "The reconnect handshake. A unit that was disconnected asks where the gateway got to, so buffered frames resume from there instead of being resent in full or dropped. A null sequence means the gateway has never accepted a frame from this unit.",
+  "type": "object",
+  "required": ["unitId", "lastAcceptedSequence", "lastSessionId", "lastReceivedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "unitId": { "type": "string", "minLength": 1 },
+    "lastAcceptedSequence": { "type": ["integer", "null"], "minimum": 1 },
+    "lastSessionId": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "The session that sequence belongs to. A unit resuming with a new session restarts its numbering."
+    },
+    "lastReceivedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

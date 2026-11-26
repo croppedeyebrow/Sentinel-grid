@@ -1,0 +1,5 @@
+{
+  "code": "VALUE_OUT_OF_RANGE",
+  "error": "battery is out of range: 150",
+  "details": { "sensor": "battery", "value": "150" }
+}

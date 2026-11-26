@@ -34,6 +34,46 @@ ones: approval freezes them to the mission version, so they cannot be shared or
 edited from elsewhere. The reasoning is recorded in
 [the mission scenario](../docs/scenarios/patrol-mission.md).
 
+### Telemetry Gateway (Day 05–06)
+
+A separate service — the Rust communication boundary. It is the only writer of
+telemetry: nothing else accepts frames, and the simulator holds no database
+credentials.
+
+| Method | Path | Request | Success | Notes |
+| --- | --- | --- | --- | --- |
+| POST | `/api/v1/telemetry/frames` | [frame](schemas/telemetry-frame.schema.json) | 202 [receipt](schemas/telemetry-receipt.schema.json) | `Authorization: Bearer <token>` required |
+| GET | `/api/v1/telemetry/units/{unitId}/resume` | — | 200 [resume point](schemas/telemetry-resume.schema.json) | Reconnect handshake |
+| GET | `/health/live` | — | 200 | Does not touch the stream |
+| GET | `/health/ready` | — | 200 / 503 | 503 while the stream cannot be published to |
+
+A frame may report any subset of the sensors, and it carries the moment the
+values were **measured**, which is not the moment they arrive. Both times
+travel with the event, because freshness means different things in the live
+picture and in a mission's coverage — see
+[ADR 0003](../docs/adr/0003-patrol-mission-lifecycle-and-coverage.md) §3.
+
+The receipt tells the sender where its frame sat in the session's sequence
+(`ACCEPTED`, `DUPLICATE`, `OUT_OF_ORDER`, `GAP`) and the resume point for a
+reconnect. Refusals use [telemetry-error.schema.json](schemas/telemetry-error.schema.json),
+whose vocabulary is the gateway's own: these are communication faults, not
+mission faults.
+
+### Telemetry stream
+
+The gateway publishes [telemetry-event.schema.json](schemas/telemetry-event.schema.json)
+to Redis Streams, and the Go consumer both applies it and stores it as the
+receipt log. **Everything that arrived appears there, including what was
+refused**, because `종합_기획_문서/07_데이터베이스_이벤트_아키텍처.md` requires
+the fact of receipt to survive even when the value is not applied. A refused
+frame may not have parsed, so its unit, session and sequence can be null; an
+applied one never can.
+
+Still to come in this slice: the Operational Picture response grows a `stream`
+object per unit — session, last received moment, missing frame count and
+rejected frame count — which lands with the projection that produces those
+numbers rather than being published before anything can fill it.
+
 ## Rules every mutation follows
 
 **Optimistic locking.** Each transition body carries `version`, the revision
@@ -71,6 +111,24 @@ which checkpoint lies outside the area, which version was expected.
 | `NOT_DRAFT` | 409 | The plan is frozen and can no longer be edited |
 | `NOT_PROVISIONED` | 503 | No Site Profile is configured yet |
 | `PROJECTION_UNAVAILABLE` | 503 | The projection store cannot be reached |
+
+## Telemetry gateway codes
+
+The gateway refuses frames, not requests, so it has its own vocabulary. Every
+refusal is still recorded as received, with the code and the facts.
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `UNAUTHENTICATED` | 401 | Missing or wrong token |
+| `MALFORMED_FRAME` | 400 | Not a frame: bad JSON, missing or undeclared field, empty identifier |
+| `FRAME_TOO_LARGE` | 413 | Larger than the gateway accepts; refused before parsing |
+| `NO_SENSOR_VALUE` | 422 | The frame reports no sensor, so there is nothing to apply |
+| `VALUE_OUT_OF_RANGE` | 422 | A reported value cannot be true (`battery=150`, latitude 95) |
+| `INVALID_SEQUENCE` | 422 | Sequence numbers start at 1 |
+| `MEASURED_IN_FUTURE` | 422 | Measured further ahead of the gateway clock than the allowed skew |
+| `UNKNOWN_UNIT` | 404 | The frame names a unit the platform does not know |
+| `STREAM_UNAVAILABLE` | 503 | The gateway cannot publish, so it refuses rather than accepting what it cannot forward |
+| `OVERLOADED` | 429 | The bounded queue is full and ordinary telemetry is being shed |
 
 ## Reading the mission resource
 

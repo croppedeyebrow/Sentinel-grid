@@ -1,0 +1,13 @@
+{
+  "eventId": "01JDH2F8YQ5V3K7N9M4P2T6R8S",
+  "outcome": "OUT_OF_ORDER",
+  "unitId": "30000000-0000-0000-0000-000000000001",
+  "sessionId": "9f1c2b44-7e0a-4d1e-9f6b-5a2c8d0e1f33",
+  "sequence": 44,
+  "observedAt": "2026-11-26T09:14:15Z",
+  "receivedAt": "2026-11-26T09:14:25Z",
+  "sensors": { "battery": 80 },
+  "missingFrames": null,
+  "rejection": null,
+  "frameBytes": 178
+}

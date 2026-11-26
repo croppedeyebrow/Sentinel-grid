@@ -1,0 +1,16 @@
+{
+  "eventId": "01JDH2F9B1A4C7E0G3J6M9Q2T5",
+  "outcome": "REJECTED",
+  "unitId": "30000000-0000-0000-0000-000000000001",
+  "sessionId": "9f1c2b44-7e0a-4d1e-9f6b-5a2c8d0e1f33",
+  "sequence": 45,
+  "observedAt": "2026-11-26T09:14:18Z",
+  "receivedAt": "2026-11-26T09:14:18Z",
+  "sensors": null,
+  "missingFrames": null,
+  "rejection": {
+    "code": "VALUE_OUT_OF_RANGE",
+    "detail": "battery is out of range: 150"
+  },
+  "frameBytes": 165
+}
