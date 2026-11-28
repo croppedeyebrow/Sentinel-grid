@@ -4,12 +4,16 @@
 | --- | --- | --- | --- |
 | Operational Picture (Day 01–02) | 완료 | [01_운영상황도_슬라이스](docs/개발_과정_14일/01_운영상황도_슬라이스_Day01-02.md) | [ADR 0002](docs/adr/0002-two-axis-unit-status.md) |
 | Patrol Mission (Day 03–04) | 완료 | [02_순찰임무_슬라이스](docs/개발_과정_14일/02_순찰임무_슬라이스_Day03-04.md) | [ADR 0003](docs/adr/0003-patrol-mission-lifecycle-and-coverage.md) |
-| Telemetry Reliability (Day 05–06) | 1단계(수집·투영) 동작 | [03_텔레메트리신뢰성_슬라이스](docs/개발_과정_14일/03_텔레메트리신뢰성_슬라이스_Day05-06.md), [시나리오](docs/scenarios/telemetry-reliability.md) | 2단계와 함께 기록 |
+| Telemetry Reliability (Day 05–06) | 1단계(수집·투영) 완료 | [03_텔레메트리신뢰성_슬라이스](docs/개발_과정_14일/03_텔레메트리신뢰성_슬라이스_Day05-06.md), [시나리오](docs/scenarios/telemetry-reliability.md) | [ADR 0004](docs/adr/0004-telemetry-ingest-and-per-sensor-freshness.md) |
 
 텔레메트리 슬라이스는 두 단계로 나뉩니다. **1단계**는 프레임을 받아 판정하고 투영까지
 반영하는 경로(Rust 게이트웨이 → Redis Streams → Go 소비자 → PostgreSQL)이며 지금
 동작합니다. **2단계**는 그 변화를 콘솔로 실시간 전달하는 경로(WebSocket)로, 아직
-없습니다. 현재 콘솔은 폴링으로 같은 투영을 읽습니다.
+없습니다. 현재 콘솔은 10초 폴링으로 같은 투영을 읽습니다.
+
+1단계가 약속한 실패 상황과 성공 기준은 실제 스택에서 하나씩 측정했고, 결과와 그
+과정에서 드러난 결함은 [시나리오 문서의 검증 결과](docs/scenarios/telemetry-reliability.md#verification-results--phase-1)에,
+결정 근거와 제한사항은 [ADR 0004](docs/adr/0004-telemetry-ingest-and-per-sensor-freshness.md)에 있습니다.
 
 개발 방식은 [docs/00_도메인_수직슬라이스_개발_가이드.md](docs/00_도메인_수직슬라이스_개발_가이드.md),
 초기 환경 기준은 [docs/01_초기_개발환경_세팅.md](docs/01_초기_개발환경_세팅.md)입니다.
@@ -75,7 +79,13 @@ pnpm workspace 루트는 저장소 최상위이며, `apps/*`가 워크스페이�
 플랫폼 장애를 편대 전멸로 읽게 되므로, 플랫폼은 자신의 수집 상태를 따로 보고합니다.
 유닛별 사실은 고치지 않고 그대로 두고, 그 위에 "침묵의 원인이 우리 쪽일 수 있다"는
 사실을 더합니다. 수집 경로를 돌리지 않는 인스턴스는 `UNKNOWN`을 보고합니다 — 만져보지
-않은 경로를 정상이라고 보증하지 않습니다.
+않은 경로를 정상이라고 보증하지 않습니다. 세션 전환·갭·재접속 판정과 그 제한사항은
+[docs/adr/0004-telemetry-ingest-and-per-sensor-freshness.md](docs/adr/0004-telemetry-ingest-and-per-sensor-freshness.md)에 있습니다.
+
+통신 경계는 두 가지를 거부합니다 — 토큰이 없으면 **기동하지 않고**, 발행할 수 없으면
+프레임을 **받지 않습니다**. 받아둔 뒤 조용히 잃는 것보다 거절이 정직하기 때문입니다.
+반대로 인증에 실패한 프레임은 기록하지 않습니다. 어느 순찰체에도 귀속할 수 없으므로
+텔레메트리가 아니고, 기록하면 인증 없는 호출자가 원장을 채울 수 있습니다.
 
 임무도 같은 방식으로 **생명주기와 판정을 분리**합니다.
 

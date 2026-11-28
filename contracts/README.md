@@ -51,7 +51,9 @@ A frame may report any subset of the sensors, and it carries the moment the
 values were **measured**, which is not the moment they arrive. Both times
 travel with the event, because freshness means different things in the live
 picture and in a mission's coverage — see
-[ADR 0003](../docs/adr/0003-patrol-mission-lifecycle-and-coverage.md) §3.
+[ADR 0003](../docs/adr/0003-patrol-mission-lifecycle-and-coverage.md) §3. What
+the gateway admits, what it records and what it refuses to do is recorded in
+[ADR 0004](../docs/adr/0004-telemetry-ingest-and-per-sensor-freshness.md).
 
 The receipt tells the sender where its frame sat in the session's sequence
 (`ACCEPTED`, `DUPLICATE`, `OUT_OF_ORDER`, `GAP`) and the resume point for a
