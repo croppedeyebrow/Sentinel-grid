@@ -246,3 +246,96 @@ def test_a_later_run_is_a_new_session_not_a_replay():
     )
     # The frames themselves are still deterministic for a given start.
     assert [frame.sequence for frame in first.frames] == [frame.sequence for frame in later.frames]
+
+
+def test_a_dropped_sensor_stops_reporting_while_the_others_continue():
+    # TEL-01 from streamed data: one reading has to be able to age while the
+    # others stay current, which a frame that always carries all three sensors
+    # could never show.
+    run = generate(scenario("partial-sensors"), STARTED_AT)
+
+    before = [frame for frame in run.frames if frame.sequence < 10]
+    after = [frame for frame in run.frames if frame.sequence >= 10]
+
+    assert all("position" in frame.payload()["sensors"] for frame in before)
+    assert all("position" not in frame.payload()["sensors"] for frame in after)
+    # The sensors that did not fail keep arriving to the last tick.
+    assert all({"battery", "link"} <= set(frame.payload()["sensors"]) for frame in after)
+
+
+def test_a_dropout_lasts_to_the_end_of_the_run():
+    run = generate(scenario("partial-sensors"), STARTED_AT)
+
+    last = max(run.frames, key=lambda frame: frame.sequence)
+    assert "position" not in last.payload()["sensors"]
+    assert run.injected_faults()["sensor_dropout"] >= 1
+
+
+def test_the_dropped_reading_ages_past_the_others():
+    # The gap between the last position and the last battery is what makes the
+    # stale-beside-fresh case visible at all, so it is asserted here rather
+    # than left to the live run.
+    run = generate(scenario("partial-sensors"), STARTED_AT)
+
+    with_position = [frame for frame in run.frames if "position" in frame.payload()["sensors"]]
+    last_position = max(frame.observed_at for frame in with_position)
+    last_battery = max(
+        frame.observed_at for frame in run.frames if "battery" in frame.payload()["sensors"]
+    )
+
+    assert last_battery - last_position >= dt.timedelta(minutes=10)
+
+
+def test_a_dropout_that_names_no_sensor_is_refused():
+    with pytest.raises(ScenarioError, match="must name the sensors"):
+        parse_scenario(
+            {
+                "name": "bad",
+                "seed": 1,
+                "ticks": 3,
+                "units": [{"unitId": "unit-1", "latitude": 37.5, "longitude": 126.9}],
+                "faults": [{"kind": "sensor_dropout", "atTick": 1, "unit": "unit-1"}],
+            }
+        )
+
+
+def test_a_dropout_that_names_an_unknown_sensor_is_refused():
+    with pytest.raises(ScenarioError, match="unknown sensors"):
+        parse_scenario(
+            {
+                "name": "bad",
+                "seed": 1,
+                "ticks": 3,
+                "units": [{"unitId": "unit-1", "latitude": 37.5, "longitude": 126.9}],
+                "faults": [
+                    {
+                        "kind": "sensor_dropout",
+                        "atTick": 1,
+                        "unit": "unit-1",
+                        "sensors": ["altitude"],
+                    }
+                ],
+            }
+        )
+
+
+def test_a_dropout_cannot_silence_a_unit_entirely():
+    # Dropping everything is a silent unit, not an ageing reading, and the
+    # gateway already refuses an empty frame as NO_SENSOR_VALUE.
+    with pytest.raises(ScenarioError, match="silent unit"):
+        parse_scenario(
+            {
+                "name": "bad",
+                "seed": 1,
+                "ticks": 3,
+                "units": [{"unitId": "unit-1", "latitude": 37.5, "longitude": 126.9}],
+                "faults": [
+                    {
+                        "kind": "sensor_dropout",
+                        "atTick": 1,
+                        "unit": "unit-1",
+                        "sensors": ["position", "battery", "link"],
+                    }
+                ],
+            }
+        )

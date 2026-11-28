@@ -156,7 +156,13 @@ def _frames_for(scenario: Scenario, unit: Unit, started_at: dt.datetime) -> list
             "battery": int(round(battery)),
             "link": link,
         }
+        dropped = scenario.dropped_sensors(unit.unit_id, tick)
+        for sensor in dropped:
+            del sensors[sensor]
+
         injected: list[str] = []
+        if dropped:
+            injected.append("sensor_dropout")
         observed_at = moment
         send_at = moment
         padding = ""

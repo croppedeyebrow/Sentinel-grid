@@ -1,0 +1,29 @@
+# One sensor fails while the others keep reporting.
+#
+# This is requirement TEL-01 measured from streamed data rather than from a
+# seeded row: the unit's position stops being reported a quarter of the way
+# through the run and then ages past the site's 300 second position window,
+# while battery and link stay current to the last tick. The expected result on
+# screen is a stale position beside a fresh battery, and a unit condition of
+# UNKNOWN — the platform will not call a unit healthy on evidence it no longer
+# has.
+#
+# The run covers 20 simulated minutes so the dropout can actually age out of
+# the window; frames are sent as fast as the gateway answers, not in real time.
+name: partial-sensors
+seed: 20261128
+ticks: 40
+tickSeconds: 30
+
+units:
+  - unitId: 30000000-0000-0000-0000-000000000001
+    callsign: SG-01
+    latitude: 37.5665
+    longitude: 126.9780
+    battery: 88
+    link: 92
+
+faults:
+  # The position sensor stops answering at tick 10 and never returns, so its
+  # last measurement is about 15 minutes older than the battery's.
+  - { kind: sensor_dropout, atTick: 10, unit: 30000000-0000-0000-0000-000000000001, sensors: [position] }

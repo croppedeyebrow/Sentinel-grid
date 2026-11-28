@@ -1,4 +1,4 @@
-//! HTTP surface of the gateway.
+﻿//! HTTP surface of the gateway.
 //!
 //! Endpoints are published in `contracts/README.md`. The order of checks is
 //! the point of this module: identity, then size, then schema, then values,
@@ -113,16 +113,24 @@ impl AppState {
     }
 }
 
+/// Where frames are posted.
+pub const FRAMES_PATH: &str = "/api/v1/telemetry/frames";
+
+/// Where a reconnecting unit asks where to resume.
+///
+/// The parameter is written in this router's own syntax, which is not the one
+/// the contract uses, so the two are checked against each other by test rather
+/// than by eye: a path that silently stops matching answers 404 to every
+/// caller, and the frame endpoint next to it keeps working.
+pub const RESUME_PATH: &str = "/api/v1/telemetry/units/:unit_id/resume";
+
 /// Builds the router.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health/live", get(live))
         .route("/health/ready", get(ready))
-        .route("/api/v1/telemetry/frames", post(accept_frame))
-        .route(
-            "/api/v1/telemetry/units/{unit_id}/resume",
-            get(resume_point),
-        )
+        .route(FRAMES_PATH, post(accept_frame))
+        .route(RESUME_PATH, get(resume_point))
         .with_state(state)
 }
 
@@ -171,6 +179,24 @@ async fn resume_point(
 ) -> Response {
     if let Err(response) = authenticate(&state, &headers) {
         return *response;
+    }
+
+    // A device the platform does not know learns it here rather than at its
+    // first frame. The frame endpoint already refuses it, and answering the
+    // handshake as though the unit were merely new would send it on to be
+    // refused one request later.
+    if !state.registry.contains(&unit_id) {
+        let rejection = Rejection::UnknownUnit(unit_id);
+        let (status, details) = describe(&rejection);
+        return (
+            status,
+            Json(ErrorBody {
+                code: rejection.code().to_owned(),
+                error: rejection.detail(),
+                details,
+            }),
+        )
+            .into_response();
     }
 
     let known = state.resume.lock().await.get(&unit_id).cloned();

@@ -6,11 +6,21 @@ a device: it has no database credentials and no authority over missions.
 """
 
 from .generator import Frame, Run, generate
-from .scenario import FAULTS, Fault, Scenario, ScenarioError, Unit, load_scenario, parse_scenario
+from .scenario import (
+    FAULTS,
+    SENSORS,
+    Fault,
+    Scenario,
+    ScenarioError,
+    Unit,
+    load_scenario,
+    parse_scenario,
+)
 from .sender import Answer, GatewayClient, Report, send_run
 
 __all__ = [
     "FAULTS",
+    "SENSORS",
     "Answer",
     "Fault",
     "Frame",

@@ -255,20 +255,28 @@ type wireEvent struct {
 	Sequence   *int64     `json:"sequence"`
 	ObservedAt *time.Time `json:"observedAt"`
 	ReceivedAt time.Time  `json:"receivedAt"`
-	Sensors    *struct {
-		Position *struct {
-			Latitude  float64 `json:"latitude"`
-			Longitude float64 `json:"longitude"`
-		} `json:"position"`
-		Battery *int `json:"battery"`
-		Link    *int `json:"link"`
-	} `json:"sensors"`
-	MissingFrames *int64 `json:"missingFrames"`
+	// Sensors is kept as the gateway published it. Decoding it into a struct
+	// and re-encoding would add a null for every sensor the frame did not
+	// report, and the receipt log would then claim readings that never
+	// arrived — it is the audit record, so it has to say exactly what came in.
+	Sensors       json.RawMessage `json:"sensors"`
+	MissingFrames *int64          `json:"missingFrames"`
 	Rejection     *struct {
 		Code   string `json:"code"`
 		Detail string `json:"detail"`
 	} `json:"rejection"`
 	FrameBytes int `json:"frameBytes"`
+}
+
+// wireSensors reads the values out of the published sensors object without
+// deciding how they are written back.
+type wireSensors struct {
+	Position *struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"position"`
+	Battery *int `json:"battery"`
+	Link    *int `json:"link"`
 }
 
 func decodeReceipt(message redis.XMessage) (application.Receipt, error) {
@@ -308,23 +316,23 @@ func decodeReceipt(message redis.XMessage) (application.Receipt, error) {
 			Detail: wire.Rejection.Detail,
 		}
 	}
-	if wire.Sensors != nil {
-		if wire.Sensors.Position != nil {
+	if len(wire.Sensors) > 0 && string(wire.Sensors) != "null" {
+		var sensors wireSensors
+		if err := json.Unmarshal(wire.Sensors, &sensors); err != nil {
+			return application.Receipt{}, fmt.Errorf("decode sensors: %w", err)
+		}
+		if sensors.Position != nil {
 			receipt.Position = &domain.Position{
-				Latitude:  wire.Sensors.Position.Latitude,
-				Longitude: wire.Sensors.Position.Longitude,
+				Latitude:  sensors.Position.Latitude,
+				Longitude: sensors.Position.Longitude,
 			}
 		}
-		receipt.Battery = wire.Sensors.Battery
-		receipt.Link = wire.Sensors.Link
+		receipt.Battery = sensors.Battery
+		receipt.Link = sensors.Link
 
-		// The sensors are kept as published so the receipt log can be read
-		// back without reconstructing them.
-		sensors, err := json.Marshal(wire.Sensors)
-		if err != nil {
-			return application.Receipt{}, fmt.Errorf("re-encode sensors: %w", err)
-		}
-		receipt.SensorsJSON = sensors
+		// Stored byte for byte as published: a sensor the frame left out is
+		// absent from the record too.
+		receipt.SensorsJSON = wire.Sensors
 	}
 
 	return receipt, nil

@@ -144,7 +144,13 @@ refusal is still recorded as received, with the code and the facts.
 | `MEASURED_IN_FUTURE` | 422 | Measured further ahead of the gateway clock than the allowed skew |
 | `UNKNOWN_UNIT` | 404 | The frame names a unit the platform does not know |
 | `STREAM_UNAVAILABLE` | 503 | The gateway cannot publish, so it refuses rather than accepting what it cannot forward |
-| `OVERLOADED` | 429 | The bounded queue is full and ordinary telemetry is being shed |
+
+Publication is synchronous: a frame is answered once it is on the stream, so a
+burst is absorbed as latency, not as shedding. There is no `OVERLOADED` code
+because nothing can emit one yet — load shedding needs a bounded queue and a
+priority rule between telemetry and commands, which arrives with command
+dispatch (Day 07–08). What is bounded today is the stream itself, which is
+trimmed to a maximum length as it is written.
 
 ## Reading the mission resource
 

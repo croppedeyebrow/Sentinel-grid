@@ -183,3 +183,83 @@ readings are data quality, not unit condition, and a silent unit remains
 | Fault injection | Python tests per fault: delay, duplicate, reorder, gap, disconnect |
 | End to end | A scenario run against the real stack, comparing the projection's verdicts with the receipt log |
 | Live view | Console tests for per-sensor freshness, partial update, disconnect and reconnect *(phase 2)* |
+
+## Verification results — phase 1
+
+Step 7 of the slice order. Measured against the running stack: PostgreSQL,
+Redis and the gateway in containers, the Mission API and its consumer on the
+host, frames from the simulator. Where a row says *measured*, the number comes
+from the live stack and not from a test double.
+
+```powershell
+docker compose up -d --wait
+cd services\mission-api; go run ./cmd/api
+cd python\patrol-simulator; uv run patrol-simulator scenarios\unreliable-link.yaml --token local-telemetry-token
+```
+
+### Failure outcomes
+
+| Fault injected | Result | Evidence |
+|---|---|---|
+| Delayed frame | Applied where its measurement is still the newest for that sensor, never trusted as current | Go domain test (a delayed frame does not replace a newer one, `lastReceivedAt` still moves); measured: `OUT_OF_ORDER` ×2 recorded and applied per sensor |
+| Duplicated frame | `DUPLICATE`, projection unchanged | Rust classification tests; Go domain test; measured: re-sending an accepted sequence answers `DUPLICATE` and the snapshot does not move |
+| Reversed order | Older measurement never overwrites a newer one | Go domain tests; measured in the `unreliable-link` run |
+| Sequence gap | Applied, gap counted, visible per unit | Go domain + integration tests; measured: 3 gap receipts ↔ `missingFrames = 3` |
+| Link loss then reconnect | New session, counters reset, readings kept; handshake reports the last accepted sequence and the resumed frame is accepted while a re-sent one is a duplicate | Go domain tests; measured: `GET …/resume` → `lastAcceptedSequence: 12`, sequence 13 → `ACCEPTED`, sequence 12 again → `DUPLICATE` |
+| Oversized or malformed frame | `FRAME_TOO_LARGE` (413) and `MALFORMED_FRAME` (400), refused before publication, recorded | Rust unit tests; measured, including an undeclared field |
+| Value out of range | `VALUE_OUT_OF_RANGE` (422), previous good value kept | Measured: `battery=150` and `latitude=95` refused, stored battery unchanged at 63 |
+| Measurement in the future | `MEASURED_IN_FUTURE` (422) | Measured: 299 s ahead refused, previous value kept |
+| Bad or missing token | `401`, and **nothing recorded as telemetry** | Measured: 10 bad frames produced 8 receipts — the two unauthenticated ones left no record, because the gateway refuses before it can attribute them |
+| Redis unavailable | Gateway refuses with `STREAM_UNAVAILABLE` and reports 503; the API keeps serving reads and the picture reports `ingest.state = NOT_RECEIVING`; both recover without a restart | Measured in the dependency drill (README); recovery 5 s |
+| Burst of frames | **Not implemented.** Publication is synchronous, so a burst is absorbed as latency, not shed; 200 frames were all accepted. The stream is trimmed to a maximum length, which bounds memory but is not back-pressure | Measured; see limitations below |
+
+### Success criteria
+
+| Criterion | Result |
+|---|---|
+| A named scenario run twice produces the same frames and verdicts | Python determinism test; measured: two `unreliable-link` runs returned identical outcome counts |
+| A stale position beside a fresh battery, from real streamed data | Measured: `position STALE` observed 09:16:20, `battery FRESH` observed 09:31:50 — a 930 s gap in one row, unit condition `UNKNOWN` |
+| Duplicate and out-of-order frames never move a sensor backwards | Go domain tests + measured |
+| A gap is visible as a gap | Measured: `missingFrames` matches the gap receipts |
+| Everything received appears in the receipt log with its outcome | Measured: every refusal except the unauthenticated ones, which never become telemetry |
+| The projection's freshness verdict matches the raw event log — *the completion gate* | **Measured:** for every unit and sensor, the stored measurement time equals the newest applied receipt carrying that sensor, with a 930 s per-sensor lag present |
+
+### What verification found
+
+Four defects, none of which the unit tests could have seen:
+
+1. **The reconnect handshake answered 404 to everyone.** The route declared its
+   parameter in a syntax the router does not use, so it matched no URL while
+   the handler next to it kept working. Now guarded by a routing test that
+   requests a concrete unit URL, which fails on the old spelling.
+2. **The receipt log claimed readings that never arrived.** The consumer
+   re-encoded the parsed sensors, which wrote `"position": null` for frames
+   that reported no position. The audit record now stores the published
+   sensors byte for byte.
+3. **Per-sensor freshness was never demonstrated from streamed data.** Every
+   simulated frame carried all three sensors, so TEL-01 could only be shown
+   from the seeded fixture. The simulator gained a `sensor_dropout` fault and
+   the `partial-sensors` scenario, which is what the measurement above uses.
+4. **The contract published a refusal nothing could emit.** `OVERLOADED` was
+   removed: load shedding needs a bounded queue and a priority rule between
+   telemetry and commands, which belongs with command dispatch.
+
+The gateway's two recovery defects — a connection that never re-established
+and a health endpoint that hung during reconnection — were found by the same
+drill in step 6 and are recorded in the README.
+
+### Limitations carried out of phase 1
+
+- **No back-pressure.** A burst is absorbed as latency. Shedding, and the
+  decision about what may be dropped first, waits for command dispatch
+  (Day 07–08).
+- **The resume point lives in gateway memory.** A gateway restart loses it, and
+  a reconnecting unit is then told it has no session — it starts a new one,
+  which the projection handles as a reconnect. Durable resume points are not
+  needed until store-and-forward devices are real.
+- **`rejectedFrames` is cumulative, not session-scoped**, while
+  `missingFrames` resets with the session. A rejection is a fact about the
+  unit's behaviour rather than about one session's sequence, but an unbounded
+  counter is of limited use to an operator.
+- **The live operator view is phase 2.** The console polls; per-sensor
+  freshness, partial updates and reconnects are visible but not pushed.

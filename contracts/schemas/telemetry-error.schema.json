@@ -4,10 +4,15 @@
   "title": "Telemetry gateway error",
   "description": "What the gateway answers when a frame may not enter the platform. The shape matches the mission API's error contract, but the vocabulary is the gateway's own: these are communication faults, not mission faults. A refused frame is still recorded as received.",
   "type": "object",
-  "required": ["code", "error"],
+  "required": [
+    "code",
+    "error"
+  ],
   "additionalProperties": false,
   "properties": {
-    "code": { "$ref": "#/$defs/errorCode" },
+    "code": {
+      "$ref": "#/$defs/errorCode"
+    },
     "error": {
       "type": "string",
       "minLength": 1,
@@ -19,18 +24,37 @@
       "description": "Facts behind the refusal, present when the code has any.",
       "properties": {
         "sensor": {
-          "enum": ["latitude", "longitude", "battery", "link"],
+          "enum": [
+            "latitude",
+            "longitude",
+            "battery",
+            "link"
+          ],
           "description": "Which value was out of range (VALUE_OUT_OF_RANGE)."
         },
-        "value": { "type": "string", "description": "The offending value, as received." },
-        "bytes": { "type": "integer", "minimum": 0 },
-        "limit": { "type": "integer", "minimum": 1 },
+        "value": {
+          "type": "string",
+          "description": "The offending value, as received."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
         "aheadSeconds": {
           "type": "integer",
           "description": "How far ahead of the gateway clock the measurement claimed to be (MEASURED_IN_FUTURE)."
         },
-        "sequence": { "type": "integer" },
-        "unitId": { "type": "string", "minLength": 1 }
+        "sequence": {
+          "type": "integer"
+        },
+        "unitId": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   },
@@ -45,10 +69,9 @@
         "INVALID_SEQUENCE",
         "MEASURED_IN_FUTURE",
         "UNKNOWN_UNIT",
-        "STREAM_UNAVAILABLE",
-        "OVERLOADED"
+        "STREAM_UNAVAILABLE"
       ],
-      "description": "STREAM_UNAVAILABLE: the gateway cannot publish, so it refuses rather than accepting what it cannot forward. OVERLOADED: the bounded queue is full and ordinary telemetry is being shed."
+      "description": "STREAM_UNAVAILABLE: the gateway cannot publish, so it refuses rather than accepting what it cannot forward."
     }
   }
 }

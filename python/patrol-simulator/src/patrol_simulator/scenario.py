@@ -26,8 +26,12 @@ FAULTS = frozenset(
         "out_of_range",  # a value that cannot be true
         "oversized",  # a frame larger than the gateway accepts
         "future",  # a measurement stamped ahead of the gateway clock
+        "sensor_dropout",  # the unit stops reporting a sensor from this tick on
     }
 )
+
+#: Sensors a frame may report, and therefore a dropout may suppress.
+SENSORS = ("position", "battery", "link")
 
 
 class ScenarioError(ValueError):
@@ -44,12 +48,31 @@ class Fault:
     unit: str
     #: How long the frame is held before it is sent, for `delay`.
     delay_seconds: int = 0
+    #: Sensors the unit stops reporting, for `sensor_dropout`. The dropout
+    #: lasts to the end of the run: a sensor that failed does not come back on
+    #: the next tick, and letting it would make the fault untestable — the
+    #: point is to watch one reading age while the others stay current.
+    sensors: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.kind not in FAULTS:
             raise ScenarioError(f"unknown fault {self.kind!r}; known faults are {sorted(FAULTS)}")
         if self.at_tick < 1:
             raise ScenarioError(f"fault tick must start at 1, got {self.at_tick}")
+        if self.kind == "sensor_dropout":
+            if not self.sensors:
+                raise ScenarioError("sensor_dropout must name the sensors that stop reporting")
+            unknown = sorted(set(self.sensors) - set(SENSORS))
+            if unknown:
+                raise ScenarioError(f"unknown sensors {unknown}; known sensors are {list(SENSORS)}")
+            if set(self.sensors) == set(SENSORS):
+                # A frame with no sensor at all is a different fault, and the
+                # gateway refuses it as NO_SENSOR_VALUE. Dropping everything
+                # here would silently stop the unit instead of ageing one
+                # reading, which is what this fault is for.
+                raise ScenarioError(
+                    "sensor_dropout cannot drop every sensor; that is a silent unit"
+                )
 
 
 @dataclass(frozen=True)
@@ -103,6 +126,16 @@ class Scenario:
             fault for fault in self.faults if fault.unit == unit_id and fault.at_tick == tick
         )
 
+    def dropped_sensors(self, unit_id: str, tick: int) -> frozenset[str]:
+        """Sensors this unit has stopped reporting by this tick."""
+        dropped: set[str] = set()
+        for fault in self.faults:
+            if fault.kind != "sensor_dropout" or fault.unit != unit_id:
+                continue
+            if fault.at_tick <= tick:
+                dropped.update(fault.sensors)
+        return frozenset(dropped)
+
     def duration(self) -> dt.timedelta:
         """How much simulated time the run covers."""
         return dt.timedelta(seconds=self.ticks * self.tick_seconds)
@@ -141,6 +174,7 @@ def parse_scenario(document: Any) -> Scenario:
             at_tick=int(entry["atTick"]),
             unit=str(entry["unit"]),
             delay_seconds=int(entry.get("delaySeconds", 0)),
+            sensors=tuple(str(sensor) for sensor in entry.get("sensors", ())),
         )
         for entry in document.get("faults", [])
     )
