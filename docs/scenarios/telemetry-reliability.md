@@ -263,3 +263,174 @@ drill in step 6 and are recorded in the README.
   counter is of limited use to an operator.
 - **The live operator view is phase 2.** The console polls; per-sensor
   freshness, partial updates and reconnects are visible but not pushed.
+
+---
+
+# Phase 2 — live operator view
+
+Scope definition for the second half of the slice, written before any socket
+code exists. Steps 1 and 2 of the slice order, continued from the phase 1
+sections above.
+
+Phase 1 made the platform's knowledge correct. Phase 2 makes it arrive. Today
+the console polls every ten seconds, so a unit can drop and come back inside
+one interval and the operator never learns it happened — the projection holds
+the truth, the screen holds a version of it up to ten seconds old, and nothing
+on screen says which.
+
+## Users
+
+| User | Does |
+|---|---|
+| Patrol operator | Watches the picture change as it changes: a sensor going stale, a unit falling silent, a unit coming back |
+| Patrol operator | Needs to know when the screen itself is behind, and not mistake a frozen screen for a quiet fleet |
+| Reliability engineer | Confirms the pushed picture never disagrees with what a plain read of the API would return |
+
+## Starting conditions
+
+- The ingest path works end to end: the gateway admits frames, the consumer
+  applies them, and the projection and receipt log agree (phase 1 completion
+  gate).
+- `GET /api/v1/operational-picture` serves the whole picture, including
+  per-sensor freshness, each unit's `stream` and the platform's `ingest`.
+- The console reads that endpoint on a ten second interval and has no notion of
+  being live or behind.
+- The consumer already knows exactly what each applied event changed — which
+  sensors, whether it was a reconnect — and throws that knowledge away.
+
+## Flow
+
+1. **The console opens a socket** and is sent the whole picture first, so it
+   never starts from a partial view.
+2. **The consumer applies an event** and hands the change to the hub. The hub
+   sends the units that actually changed, nothing else.
+3. **The console applies the change** and marks what moved, so the operator's
+   eye is drawn to the unit that changed rather than to the whole list.
+4. **The platform's own intake changes** — ingest breaks or recovers — and that
+   is pushed too, because it is the fact that decides how every unit's silence
+   should be read.
+5. **A message is missed.** The console notices the gap in the stream's
+   revisions and asks for a fresh picture rather than carrying on with a
+   version it knows is incomplete.
+6. **The socket drops.** The console falls back to polling and says so on
+   screen. When the socket returns it starts again from a whole picture.
+
+## Decisions taken up front
+
+- **The push is driven by applying, not by a timer.** The consumer is where the
+  change is known, so that is where it is announced. A timer would reintroduce
+  the delay this phase exists to remove, and would read the projection on a
+  schedule to discover what the consumer already knew.
+- **A delta carries whole units, not field patches.** The client replaces a
+  unit by id. Applying the same delta twice leaves the same screen, and no
+  merge rule has to live in the browser. Patches would buy bandwidth this
+  scale does not need and cost the client a reconciliation it can get wrong.
+- **Every message carries a revision, and a gap forces a resync.** The client
+  that notices it missed something asks for the whole picture instead of
+  guessing. A screen that silently skips a change is worse than one that
+  reloads.
+- **A client that cannot keep up is disconnected, not quietly trimmed.** Each
+  connection has a bounded buffer; a connection that overflows it is closed and
+  the client reconnects into a fresh snapshot. Dropping messages to keep a slow
+  client attached would leave it showing a picture nobody can describe.
+- **Falling back to polling is visible.** The screen says when it is not live.
+  This is the same rule as phase 1's `ingest` axis: the platform states what it
+  does not know rather than letting a stale screen look current.
+- **The socket is unauthenticated for now, like the REST endpoints.** It is
+  served from the same service, restricted by the same origin rules.
+  Authority is Day 12 (SEC-01), and adding a second, different answer here
+  would have to be redone then.
+- **The socket is additive.** `GET /api/v1/operational-picture` keeps working
+  unchanged, which is what makes the fallback possible and keeps the contract
+  test for the REST shape meaningful.
+
+## Message rules
+
+One socket, one direction for data. The client sends only a resync request.
+
+| Message | When | Carries |
+|---|---|---|
+| `snapshot` | On connect, and on any resync | The whole picture: site, areas, routes, every unit, `ingest`, and the current revision |
+| `units` | A unit's projection changed | Only the changed units, whole, with the new revision |
+| `ingest` | The platform's intake changed state | The `ingest` object and the new revision |
+| `resync` (client → server) | The client saw a revision gap | Nothing; the server answers with a `snapshot` |
+
+Rules the messages obey:
+
+- The revision increases by one per message on a connection. It is a
+  per-connection counter, not a global one: it answers "did I miss something",
+  not "which version of the world is this".
+- A `snapshot` resets the client's expectation to its own revision, so a
+  resync cannot leave the client permanently suspicious.
+- Nothing is pushed that did not change. An event that applied nothing — a
+  duplicate, a stale sensor — produces no message.
+- A pushed unit is the same shape as a unit in the REST response, validated
+  against the same schema. There is no second unit shape to keep in step.
+
+## Screen draft (step 2)
+
+The phase 1 draft deferred this. The unit card and the stream row already
+exist, so what this draft decides is what *liveness* looks like and what the
+operator must be able to tell apart.
+
+| Region | Shows | Why |
+|---|---|---|
+| Topbar liveness | `실시간` / `폴링` / `연결 중`, with the age of the last message | A frozen screen and a quiet fleet look identical without it |
+| Unit card | A brief highlight on the unit that just changed, and which sensor it was | Change on a six-unit list is otherwise invisible; the operator should not have to diff the screen themselves |
+| Unit card | The reconnect badge the phase 1 stream row already carries, now appearing the moment it happens | A reconnect is the event an operator most wants to catch, and it is the one most likely to fall inside a poll interval |
+| Ingest banner | Unchanged from phase 1, but now updated by push | The platform's silence should reach the screen faster than the units' silence |
+| Resync notice | A brief line when the client reloaded because it missed messages | An operator who sees the list flash should know why |
+
+What must not change:
+
+- The two axes. A unit that goes silent is still `UNKNOWN`, never a failure,
+  and a highlight marks *a change*, not *a problem*.
+- No interpolation. A delta for a unit replaces that unit; a unit nobody
+  mentioned keeps its previous reading and keeps ageing against the policy.
+- Ages still count against the moment the server judged the picture, which
+  means a snapshot's `generatedAt` and a delta's own timestamp both travel.
+
+Screen state stays screen state: which unit is highlighted, whether the list
+is scrolled, the resync notice. Server state stays server state: the picture
+itself. The live connection does not become a place to keep UI decisions.
+
+## Success
+
+- A unit that drops and comes back is visible on screen without a reload, and
+  within a second of the frame arriving.
+- A sensor going stale appears as that sensor going stale, not as the unit
+  changing wholesale.
+- The pushed picture never disagrees with a plain read: after any sequence of
+  deltas, a fresh `GET` returns the same verdicts the screen is showing — the
+  phase's completion gate.
+- Killing the socket leaves a working screen that says it is not live, and
+  restoring it returns to live without a reload.
+- A client that misses messages reloads instead of showing a picture built on
+  a gap.
+- Nothing is pushed for an event that changed nothing.
+
+## Failure outcomes to exercise
+
+| Fault injected | Expected |
+|---|---|
+| Socket refused at page load | Console polls from the start and says it is not live; no error state |
+| Socket dropped mid-session | Falls back to polling within one retry, badge changes, no data lost on reconnect |
+| Service restarted | Clients reconnect and receive a fresh snapshot; no client shows a pre-restart picture |
+| Revision gap on the wire | Client requests a resync and the screen is whole again, with a notice |
+| Slow client (socket not read) | Server closes that connection after its buffer fills; other clients unaffected |
+| Ingest breaks while connected | `ingest` push arrives, the banner appears without waiting for a unit to change |
+| Duplicate or stale event applied | No message is sent at all |
+| Many clients connected | Each gets its own snapshot and the same deltas; one slow client does not delay the others |
+| Redis unavailable | Deltas stop because nothing is being applied; the ingest push says why, and the screen stays live |
+
+## Verification plan
+
+| What | Where |
+|---|---|
+| Revision and gap handling | Go unit tests on the hub; console tests on the client reducer |
+| Delta is idempotent per unit | Console test: applying the same delta twice leaves the same model |
+| Nothing pushed for a no-op apply | Go test: an apply result that changed nothing produces no message |
+| Slow client is dropped, not trimmed | Go test with a blocked consumer of the connection |
+| Fallback and recovery | Console tests with a failing socket, then a working one |
+| Push and read agree | End to end: run a scenario with the socket open, then compare the screen's model with a fresh read — the completion gate |
+| Reconnect latency | Measured on the live stack: frame received to screen updated |
