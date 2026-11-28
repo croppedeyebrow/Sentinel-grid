@@ -9,7 +9,8 @@
     "site",
     "patrolAreas",
     "patrolRoutes",
-    "units"
+    "units",
+    "ingest"
   ],
   "additionalProperties": false,
   "properties": {
@@ -38,6 +39,9 @@
       "items": {
         "$ref": "#/$defs/unit"
       }
+    },
+    "ingest": {
+      "$ref": "#/$defs/ingest"
     }
   },
   "$defs": {
@@ -437,6 +441,37 @@
           "description": "Frames that arrived for this unit and could not be used."
         }
       }
+    },
+    "ingest": {
+      "type": "object",
+      "description": "Whether telemetry is reaching the platform. Published separately from the units because a broken intake makes every unit look silent, and a client must not read a platform fault as a lost fleet.",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "lastEventAt"
+      ],
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/ingestState"
+        },
+        "lastEventAt": {
+          "description": "When the platform last took in a telemetry event; null when nothing has arrived since it started.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "ingestState": {
+      "description": "RECEIVING: the intake path works, so a unit's silence is the unit's own. NOT_RECEIVING: the platform cannot take telemetry in. UNKNOWN: this instance cannot tell, which is reported rather than assumed healthy.",
+      "type": "string",
+      "enum": [
+        "RECEIVING",
+        "NOT_RECEIVING",
+        "UNKNOWN"
+      ]
     }
   }
 }

@@ -1,5 +1,7 @@
 import type {
   Freshness,
+  Ingest,
+  IngestState,
   ObservationPolicy,
   ObservedPercent,
   ObservedPosition,
@@ -245,6 +247,51 @@ export function countUntrustedPositions(units: readonly UiPatrolUnit[]): number 
 export function countSilentStreams(units: readonly UiPatrolUnit[]): number {
   return units.filter((unit) => !unit.stream.arriving).length
 }
+export const ingestStateLabel: Record<IngestState, string> = {
+  RECEIVING: '수신 경로 정상',
+  NOT_RECEIVING: '플랫폼이 수신하지 못하고 있습니다',
+  UNKNOWN: '수신 경로 상태를 알 수 없습니다',
+}
+
+export interface UiIngest {
+  state: IngestState
+  label: string
+  /** True only while the platform is taking telemetry in. */
+  receiving: boolean
+  /**
+   * True when a unit's silence cannot be held against the unit, because the
+   * platform itself is not receiving or cannot say.
+   */
+  silenceIsOurs: boolean
+  lastEventAgoLabel: string | null
+  /** What the operator has to understand, empty when nothing is wrong. */
+  warning: string
+}
+
+/**
+ * Describes the platform's own intake. This is read before any unit's silence
+ * is interpreted: when the intake is broken every unit goes quiet, and a
+ * screen that only showed per-unit silence would report a lost fleet instead
+ * of a lost pipe.
+ */
+export function toUiIngest(ingest: Ingest, now: Date): UiIngest {
+  const receiving = ingest.state === 'RECEIVING'
+  const warning = receiving
+    ? ''
+    : ingest.state === 'NOT_RECEIVING'
+      ? '수신 경로가 끊겼습니다. 순찰체의 침묵은 순찰체 문제가 아닐 수 있습니다.'
+      : '수신 경로 상태를 확인할 수 없습니다. 순찰체의 침묵을 단정하지 마세요.'
+
+  return {
+    state: ingest.state,
+    label: ingestStateLabel[ingest.state],
+    receiving,
+    silenceIsOurs: !receiving,
+    lastEventAgoLabel: formatAge(ingest.lastEventAt, now),
+    warning,
+  }
+}
+
 export function describePolicy(policy: ObservationPolicy): string {
   return `위치 ${policy.positionStaleAfterSeconds}초 · 배터리 ${policy.batteryStaleAfterSeconds}초 · 링크 ${policy.linkStaleAfterSeconds}초 이후 지연`
 }

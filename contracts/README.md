@@ -75,6 +75,15 @@ be stale beside a current one, and each unit carries a `stream` object:
 `state` (`STREAMING`, `SILENT`, `NEVER_SEEN`), `sessionId`, `sessionStartedAt`,
 `lastReceivedAt`, `reconnected`, `missingFrames` and `rejectedFrames`.
 
+The response also carries `ingest`, the platform's account of its own intake:
+`state` (`RECEIVING`, `NOT_RECEIVING`, `UNKNOWN`) and `lastEventAt`. It is
+published separately from the units because a broken intake makes **every**
+unit go silent at once, and a client that only had per-unit silence would
+report a lost fleet instead of a lost pipe. `UNKNOWN` is what an instance that
+does not run the intake path reports — it never vouches for a path it has not
+touched. Per-unit facts are left as they are; the platform adds its own fact
+rather than rewriting theirs.
+
 `sessionStartedAt` is a **measurement** time — when the current session's first
 frame was measured, not when it arrived. A session change is judged by
 measurement order, because a delayed frame is measured early and received late:

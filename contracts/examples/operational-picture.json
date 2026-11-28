@@ -1,5 +1,9 @@
 {
   "generatedAt": "2026-11-12T09:00:00Z",
+  "ingest": {
+    "state": "RECEIVING",
+    "lastEventAt": "2026-11-26T04:59:54Z"
+  },
   "site": {
     "id": "10000000-0000-0000-0000-000000000001",
     "name": "Sentinel Test Site",

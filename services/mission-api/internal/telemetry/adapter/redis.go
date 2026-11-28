@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -32,6 +33,25 @@ type StreamReader struct {
 	block     time.Duration
 	handler   *application.Consumer
 	logger    *slog.Logger
+
+	// status is what the reader knows about its own ingest path, which the
+	// Operational Picture reports so a broken stream is not read as a silent
+	// fleet.
+	mu     sync.Mutex
+	status StreamStatus
+}
+
+// StreamStatus is the reader's account of itself.
+type StreamStatus struct {
+	// Known is false until the reader has tried once. Before that it reports
+	// nothing rather than claiming health.
+	Known bool
+	// Reachable is whether the last attempt to read the stream worked. An
+	// empty read counts as reachable: the platform can receive, the units are
+	// simply quiet.
+	Reachable bool
+	// LastEventAt is when the platform last took in an event.
+	LastEventAt time.Time
 }
 
 // StreamConfig is what the reader needs to start.
@@ -69,6 +89,28 @@ func NewStreamReader(
 		block:     config.Block,
 		handler:   handler,
 		logger:    logger,
+	}
+}
+
+// Status reports what the reader knows about its own ingest path.
+func (r *StreamReader) Status() StreamStatus {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.status
+}
+
+func (r *StreamReader) noteReachable(reachable bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.status.Known = true
+	r.status.Reachable = reachable
+}
+
+func (r *StreamReader) noteEvent(at time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if at.After(r.status.LastEventAt) {
+		r.status.LastEventAt = at
 	}
 }
 
@@ -116,7 +158,9 @@ func (r *StreamReader) Run(ctx context.Context) error {
 
 		switch {
 		case errors.Is(err, redis.Nil):
-			// Nothing arrived inside the blocking window.
+			// Nothing arrived inside the blocking window. The stream answered,
+			// so the platform can receive: this is the units being quiet.
+			r.noteReachable(true)
 			cursor = ">"
 			continue
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -130,10 +174,14 @@ func (r *StreamReader) Run(ctx context.Context) error {
 				slog.String("stream", r.stream), slog.String("group", r.group))
 			if err := r.EnsureGroup(ctx); err != nil {
 				r.logger.ErrorContext(ctx, "cannot recreate consumer group", slog.Any("error", err))
+				r.noteReachable(false)
+			} else {
+				r.noteReachable(true)
 			}
 			cursor = "0"
 			continue
 		case err != nil:
+			r.noteReachable(false)
 			r.logger.WarnContext(ctx, "telemetry stream read failed", slog.Any("error", err))
 			select {
 			case <-ctx.Done():
@@ -142,6 +190,8 @@ func (r *StreamReader) Run(ctx context.Context) error {
 			}
 			continue
 		}
+
+		r.noteReachable(true)
 
 		delivered := 0
 		for _, stream := range streams {
@@ -168,6 +218,9 @@ func (r *StreamReader) consume(ctx context.Context, message redis.XMessage) {
 		r.acknowledge(ctx, message.ID)
 		return
 	}
+
+	// Something reached the platform, whether or not its value could be used.
+	r.noteEvent(receipt.ReceivedAt)
 
 	if err := r.handler.Handle(ctx, receipt); err != nil {
 		if errors.Is(err, application.ErrUnusableReceipt) {

@@ -156,3 +156,41 @@ func TestOperationalPictureWrapsReaderFailure(t *testing.T) {
 		t.Fatalf("err = %v, want it to wrap the reader failure", err)
 	}
 }
+
+func TestThePictureReportsTheIngestPathItWasGiven(t *testing.T) {
+	// The read model must not infer the ingest state from the units: when the
+	// platform stops receiving, every unit goes quiet and inferring it from
+	// them would turn a platform fault into a lost fleet.
+	service := NewService(
+		&fakeReader{projection: projectionWith(freshUnit("SG-01"))},
+		WithClock(func() time.Time { return fixedNow }),
+		WithIngestStatus(func() domain.Ingest {
+			return domain.Ingest{State: domain.IngestNotReceiving, LastEventAt: fixedNow.Add(-2 * time.Minute)}
+		}),
+	)
+
+	picture, err := service.OperationalPicture(context.Background())
+	if err != nil {
+		t.Fatalf("operational picture: %v", err)
+	}
+
+	if picture.Ingest.State != domain.IngestNotReceiving {
+		t.Errorf("ingest = %q, want NOT_RECEIVING", picture.Ingest.State)
+	}
+	if picture.Ingest.Trustworthy() {
+		t.Error("a broken ingest path cannot vouch for a unit's silence")
+	}
+}
+
+func TestAPictureWithoutAnIngestPathSaysUnknown(t *testing.T) {
+	service := NewService(&fakeReader{projection: projectionWith(freshUnit("SG-01"))}, WithClock(func() time.Time { return fixedNow }))
+
+	picture, err := service.OperationalPicture(context.Background())
+	if err != nil {
+		t.Fatalf("operational picture: %v", err)
+	}
+
+	if picture.Ingest.Reported() != domain.IngestUnknown {
+		t.Errorf("ingest = %q, want UNKNOWN", picture.Ingest.Reported())
+	}
+}

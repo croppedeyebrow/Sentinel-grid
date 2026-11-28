@@ -16,6 +16,7 @@ import (
 
 	pictureadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/adapter"
 	pictureapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/application"
+	picturedomain "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/operationalpicture/domain"
 	missionadapter "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/adapter"
 	missionapp "github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/patrolmission/application"
 	"github.com/croppedeyebrow/sentinel-grid/services/mission-api/internal/platform/config"
@@ -55,19 +56,10 @@ func run(logger *slog.Logger) error {
 
 	mux := http.NewServeMux()
 
-	pictureReader := pictureadapter.NewPostgresReader(pool)
-	pictureadapter.
-		NewHandler(pictureapp.NewService(pictureReader), pictureReader, logger).
-		Register(mux)
-
-	missionRepository := missionadapter.NewPostgresRepository(pool)
-	missionadapter.
-		NewHandler(missionapp.NewService(missionRepository, ids.NewUUID), logger).
-		Register(mux)
-
 	// Telemetry ingest runs alongside the HTTP server: it reads what the
 	// gateway published and projects it. The API keeps serving reads if the
-	// stream is unreachable, so this failure does not take the service down.
+	// stream is unreachable, so this failure does not take the service down —
+	// the picture reports the ingest path's own state instead.
 	telemetryClient, err := redis.ParseURL(settings.RedisURL)
 	if err != nil {
 		return fmt.Errorf("parse redis url: %w", err)
@@ -85,6 +77,20 @@ func run(logger *slog.Logger) error {
 		telemetryapp.NewConsumer(telemetryadapter.NewPostgresRepository(pool)),
 		logger,
 	)
+
+	pictureReader := pictureadapter.NewPostgresReader(pool)
+	pictureadapter.
+		NewHandler(
+			pictureapp.NewService(pictureReader, pictureapp.WithIngestStatus(ingestStatus(streamReader))),
+			pictureReader,
+			logger,
+		).
+		Register(mux)
+
+	missionRepository := missionadapter.NewPostgresRepository(pool)
+	missionadapter.
+		NewHandler(missionapp.NewService(missionRepository, ids.NewUUID), logger).
+		Register(mux)
 
 	go func() {
 		logger.Info("telemetry consumer starting",
@@ -123,4 +129,21 @@ func run(logger *slog.Logger) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	return server.Shutdown(shutdownCtx)
+}
+
+// ingestStatus translates the stream reader's account of itself into the fact
+// the Operational Picture publishes. The translation lives here so the
+// telemetry adapter does not have to know about the picture's domain.
+func ingestStatus(reader *telemetryadapter.StreamReader) pictureapp.IngestStatus {
+	return func() picturedomain.Ingest {
+		status := reader.Status()
+		switch {
+		case !status.Known:
+			return picturedomain.Ingest{State: picturedomain.IngestUnknown, LastEventAt: status.LastEventAt}
+		case status.Reachable:
+			return picturedomain.Ingest{State: picturedomain.IngestReceiving, LastEventAt: status.LastEventAt}
+		default:
+			return picturedomain.Ingest{State: picturedomain.IngestNotReceiving, LastEventAt: status.LastEventAt}
+		}
+	}
 }

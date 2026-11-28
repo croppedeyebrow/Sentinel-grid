@@ -105,6 +105,28 @@ describe('OperationalPicturePage', () => {
     expect(screen.queryAllByTestId('status-badge')).toHaveLength(0)
   })
 
+  it('blames the platform, not the fleet, when the intake is broken', async () => {
+    // Every unit looks silent in this case, so the screen has to say where
+    // the fault is before the operator reads the unit list.
+    vi.stubGlobal(
+      'fetch',
+      respondWith({ ...example, ingest: { state: 'NOT_RECEIVING', lastEventAt: null } }),
+    )
+    renderPage()
+
+    const banner = await screen.findByLabelText('수신 경로 경고')
+    expect(banner).toHaveTextContent('플랫폼이 수신하지 못하고 있습니다')
+    expect(banner).toHaveTextContent('순찰체 문제가 아닐 수 있습니다')
+  })
+
+  it('says nothing about the intake while it is working', async () => {
+    vi.stubGlobal('fetch', respondWith(example))
+    renderPage()
+
+    await screen.findByText('SG-01')
+    expect(screen.queryByLabelText('수신 경로 경고')).not.toBeInTheDocument()
+  })
+
   it('shows an error state when the API is unavailable', async () => {
     vi.stubGlobal('fetch', respondWith({}, false))
     renderPage()

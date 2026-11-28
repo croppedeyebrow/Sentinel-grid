@@ -98,8 +98,22 @@ export const patrolUnitSchema = z.object({
   stream: unitStreamSchema,
 })
 
+export const ingestStateSchema = z.enum(['RECEIVING', 'NOT_RECEIVING', 'UNKNOWN'])
+
+/**
+ * Whether telemetry is reaching the platform at all. A broken intake makes
+ * every unit look silent, so this is read before any unit's silence is
+ * blamed on the unit.
+ */
+export const ingestSchema = z.object({
+  state: ingestStateSchema,
+  /** When the platform last took anything in; null when nothing has. */
+  lastEventAt: isoDateTime.nullable(),
+})
+
 export const operationalPictureSchema = z.object({
   generatedAt: isoDateTime,
+  ingest: ingestSchema,
   site: siteProfileSchema,
   patrolAreas: z.array(patrolAreaSchema),
   patrolRoutes: z.array(patrolRouteSchema),
@@ -115,6 +129,8 @@ export type PatrolArea = z.infer<typeof patrolAreaSchema>
 export type PatrolRoute = z.infer<typeof patrolRouteSchema>
 export type ObservedPosition = z.infer<typeof observedPositionSchema>
 export type ObservedPercent = z.infer<typeof observedPercentSchema>
+export type IngestState = z.infer<typeof ingestStateSchema>
+export type Ingest = z.infer<typeof ingestSchema>
 export type StreamState = z.infer<typeof streamStateSchema>
 export type UnitStream = z.infer<typeof unitStreamSchema>
 export type PatrolUnitDto = z.infer<typeof patrolUnitSchema>

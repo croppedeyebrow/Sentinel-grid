@@ -12,6 +12,15 @@ type operationalPictureDTO struct {
 	PatrolAreas  []patrolAreaDTO  `json:"patrolAreas"`
 	PatrolRoutes []patrolRouteDTO `json:"patrolRoutes"`
 	Units        []patrolUnitDTO  `json:"units"`
+	Ingest       ingestDTO        `json:"ingest"`
+}
+
+// ingestDTO is the platform's account of its own telemetry intake. It is
+// published next to the units because a broken intake makes every unit look
+// silent, and the client must be able to tell the two apart.
+type ingestDTO struct {
+	State       string  `json:"state"`
+	LastEventAt *string `json:"lastEventAt"`
 }
 
 type siteDTO struct {
@@ -120,6 +129,10 @@ func newOperationalPictureDTO(picture domain.OperationalPicture) operationalPict
 
 	return operationalPictureDTO{
 		GeneratedAt: picture.GeneratedAt.UTC().Format(time.RFC3339),
+		Ingest: ingestDTO{
+			State:       string(picture.Ingest.Reported()),
+			LastEventAt: moment(picture.Ingest.LastEventAt),
+		},
 		Site: siteDTO{
 			ID:     picture.Site.ID,
 			Name:   picture.Site.Name,
@@ -169,6 +182,16 @@ func observedPercent(observed domain.Evaluated[int]) observedDTO[int] {
 		ReceivedAt: iso(observed.ReceivedAt),
 		Freshness:  string(observed.Freshness),
 	}
+}
+
+// moment formats a time that may be unset. Nothing having arrived yet is a
+// fact of its own, so it is published as null rather than as the zero time.
+func moment(value time.Time) *string {
+	if value.IsZero() {
+		return nil
+	}
+	formatted := value.UTC().Format(time.RFC3339)
+	return &formatted
 }
 
 func iso(value *time.Time) *string {

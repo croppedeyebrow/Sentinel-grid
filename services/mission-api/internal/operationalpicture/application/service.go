@@ -33,9 +33,18 @@ type SnapshotReader interface {
 // same as a site with no units, which is a legitimate empty picture.
 var ErrNotProvisioned = errors.New("operational picture is not provisioned")
 
+// IngestStatus reports whether telemetry is reaching the platform.
+//
+// The read model asks for this instead of deriving it from the units, because
+// a broken ingest path makes every unit look silent and the two must not be
+// confused. A process without an ingest path reports UNKNOWN rather than
+// claiming the path is healthy.
+type IngestStatus func() domain.Ingest
+
 // Service builds the Operational Picture read model.
 type Service struct {
 	reader SnapshotReader
+	ingest IngestStatus
 	now    func() time.Time
 }
 
@@ -48,10 +57,18 @@ func WithClock(now func() time.Time) Option {
 	return func(s *Service) { s.now = now }
 }
 
+// WithIngestStatus lets the service report whether telemetry is arriving.
+// Without it the service says UNKNOWN, which is what a process that does not
+// run the ingest path can honestly claim.
+func WithIngestStatus(status IngestStatus) Option {
+	return func(s *Service) { s.ingest = status }
+}
+
 // NewService wires a Service to its projection reader.
 func NewService(reader SnapshotReader, options ...Option) *Service {
 	service := &Service{
 		reader: reader,
+		ingest: func() domain.Ingest { return domain.Ingest{State: domain.IngestUnknown} },
 		now:    func() time.Time { return time.Now().UTC() },
 	}
 	for _, option := range options {
@@ -84,5 +101,6 @@ func (s *Service) OperationalPicture(ctx context.Context) (domain.OperationalPic
 		PatrolAreas: projection.PatrolAreas,
 		Routes:      projection.Routes,
 		Units:       units,
+		Ingest:      s.ingest(),
 	}, nil
 }

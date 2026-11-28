@@ -5,6 +5,7 @@ import {
   countUntrustedPositions,
   formatAge,
   summarizeStatuses,
+  toUiIngest,
   toUiPatrolUnit,
   toUiStream,
 } from '../entities/patrol-unit/uiModel'
@@ -298,5 +299,40 @@ describe('countSilentStreams', () => {
     ]
 
     expect(countSilentStreams(views)).toBe(1)
+  })
+})
+
+describe('toUiIngest', () => {
+  const now = new Date('2026-11-12T09:00:00Z')
+
+  it('treats a working intake as the platform saying nothing is wrong', () => {
+    const ingest = toUiIngest(
+      { state: 'RECEIVING', lastEventAt: '2026-11-12T08:59:50Z' },
+      now,
+    )
+
+    expect(ingest.receiving).toBe(true)
+    expect(ingest.silenceIsOurs).toBe(false)
+    expect(ingest.warning).toBe('')
+    expect(ingest.lastEventAgoLabel).not.toBeNull()
+  })
+
+  it('says the silence may be ours when the platform is not receiving', () => {
+    // The point of the whole field: without it a broken pipe reads as a lost
+    // fleet, because every unit goes silent at once.
+    const ingest = toUiIngest({ state: 'NOT_RECEIVING', lastEventAt: null }, now)
+
+    expect(ingest.receiving).toBe(false)
+    expect(ingest.silenceIsOurs).toBe(true)
+    expect(ingest.warning).toContain('순찰체 문제가 아닐 수 있습니다')
+    expect(ingest.lastEventAgoLabel).toBeNull()
+  })
+
+  it('does not treat an unknown intake as a healthy one', () => {
+    const ingest = toUiIngest({ state: 'UNKNOWN', lastEventAt: null }, now)
+
+    expect(ingest.receiving).toBe(false)
+    expect(ingest.silenceIsOurs).toBe(true)
+    expect(ingest.warning).not.toBe('')
   })
 })

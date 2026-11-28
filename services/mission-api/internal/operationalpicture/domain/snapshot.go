@@ -99,4 +99,7 @@ type OperationalPicture struct {
 	PatrolAreas []PatrolArea
 	Routes      []PatrolRoute
 	Units       []PatrolUnitView
+	// Ingest is the platform's account of whether telemetry is arriving at
+	// all, which the units cannot answer for themselves.
+	Ingest Ingest
 }

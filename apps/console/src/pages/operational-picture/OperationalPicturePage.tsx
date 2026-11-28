@@ -8,6 +8,7 @@ import {
   statusLabel,
   statusTone,
   summarizeStatuses,
+  toUiIngest,
   toUiPatrolUnit,
   type UiObservation,
   type UiPatrolUnit,
@@ -100,6 +101,7 @@ export function OperationalPicturePage() {
   const summary = summarizeStatuses(units)
   const untrustedPositions = countUntrustedPositions(units)
   const silentStreams = countSilentStreams(units)
+  const ingest = toUiIngest(picture.ingest, judgedAt)
 
   return (
     <main className="shell">
@@ -120,11 +122,28 @@ export function OperationalPicturePage() {
           <p className="trust-note">
             수신 끊김 {silentStreams} / {units.length}
           </p>
+          <p className={`ingest-note ingest-note--${ingest.receiving ? 'ok' : 'broken'}`}>
+            {ingest.label}
+            {ingest.lastEventAgoLabel !== null ? ` · 최근 수신 ${ingest.lastEventAgoLabel}` : null}
+          </p>
           <Link className="nav-link" to="/missions">
             순찰 임무로 이동
           </Link>
         </div>
       </header>
+
+      {ingest.warning === '' ? null : (
+        <section className="ingest-banner" role="status" aria-label="수신 경로 경고">
+          <strong>{ingest.label}</strong>
+          <span>{ingest.warning}</span>
+          {silentStreams > 0 ? (
+            <span className="ingest-banner__scope">
+              현재 {silentStreams} / {units.length}대가 침묵 상태로 보이지만, 그 원인은 순찰체가 아닐 수
+              있습니다.
+            </span>
+          ) : null}
+        </section>
+      )}
 
       <section className="summary" aria-label="상태 요약">
         {statusOrder.map((status) => (
